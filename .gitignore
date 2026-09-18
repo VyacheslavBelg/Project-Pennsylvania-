@@ -1,0 +1,27 @@
+# Секреты и окружение
+.env
+.env.*
+!.env.example
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node / React
+node_modules/
+dist/
+build/
+
+# Docker
+docker-compose.override.yml
+
+# IDE / ОС
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
