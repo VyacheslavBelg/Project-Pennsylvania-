@@ -53,9 +53,10 @@
 
 | # | Задача | Кто | Файл | Готово |
 |---|---|---|---|---|
-| 1.1 | Приоритетный сегмент и контекст — конкретно, не «жители» | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ⬜ |
-| 1.2 | Формулировка проблемы по конструкции ТЗ | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ⬜ |
-| 1.3 | Подтверждение актуальности источниками, факты отделены от допущений | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ⬜ |
+| 1.1 | Приоритетный сегмент и контекст — конкретно, не «жители» | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ✅ 19.09 — житель дома под УК в момент сбоя, Казань |
+| 1.2 | Формулировка проблемы по конструкции ТЗ | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ✅ 19.09 — адресат, срок, статус |
+| 1.3 | Подтверждение актуальности источниками, факты отделены от допущений | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ✅ 19.09 — интервью не проведены |
+| 1.11 | Провести 3–5 интервью с жителями домов под УК — проверить допущения из 01-problem-statement.md | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ⬜ |
 | 1.4 | Разбор ГИС ЖКХ и «Решаем вместе»: в чём наше преимущество | Никита | [product/01-problem-statement.md](product/01-problem-statement.md) | ⬜ |
 | 1.5 | As Is, выбор точки воздействия | Никита | [product/02-as-is-to-be.md](product/02-as-is-to-be.md) | ⬜ |
 | 1.6 | To Be | Никита, Семён | [product/02-as-is-to-be.md](product/02-as-is-to-be.md) | ⬜ |
