@@ -10,6 +10,9 @@ using System.Text.Json.Serialization;
 
 const string BaseUrl = "https://platform-api2.max.ru";
 
+// Без этого консоль Windows пишет кириллицу в cp866 и лог превращается в мусор.
+Console.OutputEncoding = Encoding.UTF8;
+
 var token = Environment.GetEnvironmentVariable("MAX_BOT_TOKEN");
 if (string.IsNullOrWhiteSpace(token))
 {
@@ -97,11 +100,12 @@ while (true)
                 continue;
             }
 
-            var incoming = update.Message?.Body?.Text ?? "<без текста>";
+            var incoming = update.Message?.Body?.Text ?? string.Empty;
             var from = update.Message?.Sender?.Name ?? "неизвестный";
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {from}: {incoming}");
+            var shown = string.IsNullOrWhiteSpace(incoming) ? "<без текста>" : incoming;
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {from}: {shown}");
 
-            await SendMessageAsync(chatId.Value, "Hello, World!");
+            await SendMessageAsync(chatId.Value, BuildReply(incoming));
         }
     }
     catch (TaskCanceledException)
@@ -129,7 +133,28 @@ async Task SendMessageAsync(long chatId, string text)
         return;
     }
 
-    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] -> Hello, World!");
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] -> {text}");
+}
+
+// Команды обрабатываются в коде. Чтобы они появились в меню бота, их нужно
+// дополнительно объявить в кабинете платформы — доступа к нему у команды нет.
+static string BuildReply(string text)
+{
+    var first = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+
+    // В группах команда приходит с ником бота: /command@t273_hakaton_max_bot
+    var at = first.IndexOf('@');
+    if (at > 0)
+    {
+        first = first[..at];
+    }
+
+    return first.ToLowerInvariant() switch
+    {
+        "/start" => "Это проверочный бот команды 273. Команды: /besthackatonteam",
+        "/besthackatonteam" => "наMAXималках",
+        _ => "Hello, World!"
+    };
 }
 
 static bool HasCertificateProblem(Exception ex)
