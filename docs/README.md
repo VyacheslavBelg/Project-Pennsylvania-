@@ -114,6 +114,7 @@ MAX. Начисляется только целиком (0 или 0,15) и не 
 [05-docker-and-runtime.md](tech/05-docker-and-runtime.md) ·
 [06-security.md](tech/06-security.md)
 
-### План работ
+### План работ и настройка
 
-[ACTION-PLAN.md](ACTION-PLAN.md) — фазы, даты, распределение задач.
+- [ACTION-PLAN.md](ACTION-PLAN.md) — фазы, даты, распределение задач.
+- [SETUP.md](SETUP.md) — что установить на рабочую машину. Начинать отсюда.
