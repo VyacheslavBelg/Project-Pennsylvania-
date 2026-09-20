@@ -25,3 +25,6 @@ Thumbs.db
 
 # Логи
 *.log
+
+# Сборка мини-приложения
+src/Domovoy.WebApp/dist/

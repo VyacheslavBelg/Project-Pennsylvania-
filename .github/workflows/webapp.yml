@@ -1,0 +1,51 @@
+name: Публикация мини-приложения
+
+# Мини-приложение раздаётся GitHub Pages из ветки gh-pages.
+# Адрес зафиксирован и передан организаторам, менять его нельзя.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/Domovoy.WebApp/**'
+      - '.github/workflows/webapp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: webapp-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Domovoy.WebApp/package-lock.json
+
+      - name: Установка зависимостей
+        working-directory: src/Domovoy.WebApp
+        run: npm ci
+
+      - name: Сборка
+        working-directory: src/Domovoy.WebApp
+        env:
+          # Пока прод-хостинг не поднят (задача 0.5), переменная пустая и приложение
+          # показывает состояние «сервис не подключён» вместо белого экрана.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: npm run build
+
+      - name: Публикация в gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: src/Domovoy.WebApp/dist
+          publish_branch: gh-pages
+          commit_message: 'Сборка мини-приложения'

@@ -75,17 +75,17 @@
 
 | # | Задача | Кто | Файл | Готово |
 |---|---|---|---|---|
-| 2.1 | Монорепо, структура по [tech/01-architecture.md](tech/01-architecture.md) | Слава | | ⬜ |
-| 2.2 | `.gitignore` с `.env` до первого коммита конфигурации | Слава | [tech/06-security.md](tech/06-security.md) | ⬜ |
-| 2.3 | Docker Compose: `api` + `web` + `db`, одна команда | Слава | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ⬜ |
-| 2.4 | Прогон «clone → одна команда → работает» на чужой машине | Семён | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ⬜ |
-| 2.5 | Дом-ядро: адрес → ФИАС → дом → УК, роли, привязка пользователя | Слава | [tech/03-data-model.md](tech/03-data-model.md) | ⬜ |
-| 2.6 | Переменная часть в справочниках БД, не в коде | Слава | [tech/03-data-model.md](tech/03-data-model.md) | ⬜ |
-| 2.7 | Состояние диалога в БД, миграции и тестовые данные при старте | Слава | | ⬜ |
-| 2.8 | Каркас мини-приложения на MAX UI + MAX Bridge | Семён | | ⬜ |
-| 2.9 | Тестовые данные: подготовка набора домов и пользователей | Никита | [tech/04-data-sources.md](tech/04-data-sources.md) | ⬜ |
+| 2.1 | Монорепо, структура по [tech/01-architecture.md](tech/01-architecture.md) | Слава | | ✅ 20.09 — Domovoy.Core + Domovoy.Api + Domovoy.WebApp |
+| 2.2 | `.gitignore` с `.env` до первого коммита конфигурации | Слава | [tech/06-security.md](tech/06-security.md) | ✅ 19.09 |
+| 2.3 | Docker Compose: `api` + `web` + `db`, одна команда | Слава | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ✅ 20.09 — сборка 68 с при бюджете 5 мин |
+| 2.4 | Прогон «clone → одна команда → работает» на чужой машине | Семён | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ⬜ у Славы прошло, нужна проверка на чистой машине |
+| 2.5 | Дом-ядро: адрес → дом → УК, роли, привязка пользователя | Слава | [tech/03-data-model.md](tech/03-data-model.md) | ✅ 20.09 — поиск по подготовленному набору, ФИАС в Won't Have |
+| 2.6 | Переменная часть в справочниках БД, не в коде | Слава | [tech/03-data-model.md](tech/03-data-model.md) | ✅ 20.09 — категории, зоны, сроки с основанием |
+| 2.7 | Состояние диалога в БД, миграции и тестовые данные при старте | Слава | | ✅ 20.09 |
+| 2.8 | Каркас мини-приложения на MAX UI + MAX Bridge | Слава | | ✅ 20.09 — Vite + React + MAX UI, дальше экраны за Семёном |
+| 2.9 | Тестовые данные: расширить набор домов и сверить справочник зон с практикой | Никита | [tech/04-data-sources.md](tech/04-data-sources.md) | 🟡 7 домов Казани засеяно, нужна сверка |
 | 2.10 | Проверка в мобильной и веб-версии MAX | Семён | [tech/02-max-integration.md](tech/02-max-integration.md) | ⬜ |
-| 2.11 | Черновик README по 15 пунктам | Слава | [checklists/02-submission.md](checklists/02-submission.md) | ⬜ |
+| 2.11 | Черновик README по 15 пунктам | Слава | [checklists/02-submission.md](checklists/02-submission.md) | ✅ 20.09 — все разделы заполнены |
 
 **Готово, когда:** посторонний человек клонирует репозиторий, выполняет одну команду и видит
 работающий каркас. Время сборки замерено.

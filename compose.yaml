@@ -1,0 +1,52 @@
+# Запуск всех локальных компонентов одной командой — требование формата сдачи.
+#
+#   cp .env.example .env    (заполнить MAX_BOT_TOKEN)
+#   docker compose up -d --build
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: domovoy
+      POSTGRES_USER: domovoy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-domovoy}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Без проверки готовности api стартует раньше базы и падает на миграциях.
+      test: ["CMD-SHELL", "pg_isready -U domovoy -d domovoy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Domovoy.Api/Dockerfile
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=domovoy;Username=domovoy;Password=${POSTGRES_PASSWORD:-domovoy}"
+      Max__Token: ${MAX_BOT_TOKEN:?нужно задать MAX_BOT_TOKEN в .env}
+      Max__WebAppUrl: ${MAX_WEBAPP_URL:-}
+      WebApp__Origins: ${WEBAPP_ORIGINS:-http://localhost:8081}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Domovoy.WebApp/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    ports:
+      - "8081:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  db-data:

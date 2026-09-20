@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Domovoy.Api/Domovoy.Api.csproj" />
+    <Project Path="src/Domovoy.Core/Domovoy.Core.csproj" />
+    <Project Path="src/HelloBot/HelloBot.csproj" />
+  </Folder>
+</Solution>
