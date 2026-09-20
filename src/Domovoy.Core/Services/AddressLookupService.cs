@@ -30,27 +30,51 @@ public sealed class AddressLookupService(
     BuildingSearchService localSearch,
     IAddressSuggestService suggest)
 {
+    public const int MaxResults = 6;
+
     public async Task<IReadOnlyList<BuildingCandidate>> FindAsync(
         string query, CancellationToken ct = default)
     {
         var local = await localSearch.SearchAsync(query, ct);
 
-        var candidates = local
-            .Select(b => new BuildingCandidate(
-                b.Address.ToString(), b.Id, null, b.ManagingOrganization?.Name))
-            .ToList();
-
-        if (candidates.Count > 0)
+        // Дома с известной управляющей организацией — подготовленные данные. Они полнее
+        // реестра, поэтому вытесняют подсказки.
+        var curated = local.Where(b => b.ManagingOrganizationId is not null).ToList();
+        if (curated.Count > 0)
         {
-            return candidates;
+            return curated
+                .Select(b => new BuildingCandidate(
+                    b.Address.ToString(), b.Id, null, b.ManagingOrganization?.Name))
+                .ToList();
         }
 
-        // Своих данных нет — спрашиваем адресный реестр.
+        // Остальные локальные дома — всего лишь след предыдущих выборов из реестра.
+        // Они не должны заслонять свежие подсказки: иначе после выбора одного дома
+        // поиск по тому же тексту навсегда сузится до него.
+        var cached = local
+            .Select(b => new BuildingCandidate(b.Address.ToString(), b.Id, null, null))
+            .ToList();
+
         var suggested = await suggest.SuggestAsync(query, ct);
 
-        return suggested
-            .Select(s => new BuildingCandidate(s.Display, null, s, null))
-            .ToList();
+        var seenFias = local
+            .Where(b => b.Address.FiasId is { Length: > 0 })
+            .Select(b => b.Address.FiasId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var result = new List<BuildingCandidate>(cached);
+
+        foreach (var s in suggested)
+        {
+            if (s.FiasId is { Length: > 0 } fias && !seenFias.Add(fias))
+            {
+                continue;
+            }
+
+            result.Add(new BuildingCandidate(s.Display, null, s, null));
+        }
+
+        return result.Take(MaxResults).ToList();
     }
 
     /// <summary>

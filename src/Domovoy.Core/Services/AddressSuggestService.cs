@@ -62,46 +62,60 @@ public sealed class DaDataAddressSuggestService(
             return [];
         }
 
-        try
+        // from_bound/to_bound = house: интересуют только результаты до уровня дома,
+        // иначе в подсказках окажутся города и улицы, к которым нельзя привязаться.
+        var request = new
         {
-            // from_bound/to_bound = house: интересуют только результаты до уровня дома,
-            // иначе в подсказках окажутся города и улицы, к которым нельзя привязаться.
-            var request = new
-            {
-                query,
-                count = 5,
-                from_bound = new { value = "house" },
-                to_bound = new { value = "house" }
-            };
+            query,
+            count = 5,
+            from_bound = new { value = "house" },
+            to_bound = new { value = "house" }
+        };
 
-            using var response = await http.PostAsJsonAsync("suggest/address", request, Json, ct);
-
-            if (!response.IsSuccessStatusCode)
+        // Наблюдался разовый обрыв TLS-рукопожатия. Одна повторная попытка дешевле,
+        // чем молча сузить пользователю список домов до локальных данных.
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            try
             {
-                var body = await response.Content.ReadAsStringAsync(ct);
-                logger.LogWarning("DaData вернула {Status}: {Body}", (int)response.StatusCode, body);
-                return [];
+                using var response = await http.PostAsJsonAsync("suggest/address", request, Json, ct);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync(ct);
+                    logger.LogWarning("DaData вернула {Status}: {Body}", (int)response.StatusCode, body);
+                    return [];
+                }
+
+                var payload = await response.Content.ReadFromJsonAsync<DaDataResponse>(Json, ct);
+
+                return (payload?.Suggestions ?? [])
+                    .Where(s => s.Data?.House is not null)
+                    .Select(s => new SuggestedAddress(
+                        s.Value ?? string.Empty,
+                        s.Data?.FiasId,
+                        s.Data?.RegionWithType,
+                        s.Data?.CityWithType ?? s.Data?.SettlementWithType,
+                        s.Data?.StreetWithType,
+                        s.Data?.House))
+                    .ToList();
             }
-
-            var payload = await response.Content.ReadFromJsonAsync<DaDataResponse>(Json, ct);
-
-            return (payload?.Suggestions ?? [])
-                .Where(s => s.Data?.House is not null)
-                .Select(s => new SuggestedAddress(
-                    s.Value ?? string.Empty,
-                    s.Data?.FiasId,
-                    s.Data?.RegionWithType,
-                    s.Data?.CityWithType ?? s.Data?.SettlementWithType,
-                    s.Data?.StreetWithType,
-                    s.Data?.House))
-                .ToList();
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (attempt == 1)
+            {
+                logger.LogWarning(ex, "Подсказки по адресу недоступны, повторяю");
+            }
+            catch (Exception ex)
+            {
+                // Недоступность подсказок не ломает сценарий: остаётся поиск по своей базе.
+                logger.LogWarning(ex, "Не удалось получить подсказки по адресу");
+            }
         }
-        catch (Exception ex)
-        {
-            // Недоступность подсказок не должна ломать сценарий: остаётся поиск по своей базе.
-            logger.LogWarning(ex, "Не удалось получить подсказки по адресу");
-            return [];
-        }
+
+        return [];
     }
 
     private sealed record DaDataResponse(
