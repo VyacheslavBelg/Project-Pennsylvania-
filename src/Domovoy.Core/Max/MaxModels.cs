@@ -15,8 +15,20 @@ public sealed class MaxBotOptions
     /// <summary>Сколько секунд держать long polling. Допустимый диапазон по документации — 0..90.</summary>
     public int PollTimeoutSeconds { get; set; } = 30;
 
-    /// <summary>Адрес мини-приложения для кнопки open_app.</summary>
+    /// <summary>
+    /// Ник бота. Из него собирается прямая ссылка на мини-приложение
+    /// вида https://max.ru/{ник}?startapp={payload}.
+    /// </summary>
+    public string? BotUsername { get; set; }
+
+    /// <summary>Адрес, по которому раздаётся мини-приложение. Используется для CORS и документации.</summary>
     public string? WebAppUrl { get; set; }
+
+    /// <summary>Готова ли прямая ссылка на мини-приложение.</summary>
+    public bool HasMiniApp => !string.IsNullOrWhiteSpace(BotUsername);
+
+    public string MiniAppLink(string payload = "home") =>
+        $"https://max.ru/{BotUsername}?startapp={Uri.EscapeDataString(payload)}";
 }
 
 public sealed record MaxBotInfo(
@@ -68,7 +80,6 @@ public sealed record MaxCallback(
 
 /// <summary>
 /// Кнопки инлайн-клавиатуры. Набор типов взят из keyboard.d.ts официального пакета.
-/// Сериализация идёт в snake_case, поэтому WebApp превращается в web_app.
 /// </summary>
 public static class MaxButton
 {
@@ -81,8 +92,18 @@ public static class MaxButton
     public static object Message(string text) =>
         new { type = "message", text };
 
-    /// <summary>Открывает мини-приложение, привязанное к боту.</summary>
-    public static object OpenApp(string text, string? webApp = null, string? payload = null) =>
+    /// <summary>
+    /// Кнопка open_app непригодна в нашей конфигурации и оставлена как след проверки.
+    ///
+    /// Поле web_app обязательно (без него 400 «Field 'webApp' cannot be null»), но при
+    /// этом принимает только адреса, зарегистрированные платформой за ботом: наш адрес
+    /// на GitHub Pages даёт 404 not.found во всех написаниях. contact_id проблему
+    /// не решает.
+    ///
+    /// Рабочий способ открыть мини-приложение — обычная ссылка на max.ru/{ник}?startapp=,
+    /// см. MaxButton.Link и MaxBotOptions.MiniAppLink.
+    /// </summary>
+    public static object OpenApp(string text, string webApp, string? payload = null) =>
         new { type = "open_app", text, WebApp = webApp, payload };
 
     /// <summary>Кандидат на платформенный бонус: определение дома по местоположению.</summary>

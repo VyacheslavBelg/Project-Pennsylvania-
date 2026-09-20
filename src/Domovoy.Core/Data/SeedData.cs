@@ -111,7 +111,7 @@ public static class SeedData
             "+7 843 000-00-01", "+7 843 000-00-11");
         var uk2 = Organization("ООО УК «Ново-Савиновская»", "1651000002",
             "+7 843 000-00-02", "+7 843 000-00-22");
-        var tsj = Organization("ТСЖ «Баумана 15»", "1651000003",
+        var tsj = Organization("ТСЖ «Декабристов 112»", "1651000003",
             "+7 843 000-00-03", "+7 843 000-00-33");
 
         db.ManagingOrganizations.AddRange(uk1, uk2, tsj);

@@ -15,8 +15,11 @@ public interface IMaxBotClient
     Task SendMessageAsync(long chatId, string text, IReadOnlyList<IReadOnlyList<object>>? keyboard = null,
         CancellationToken ct = default);
 
-    Task AnswerCallbackAsync(string callbackId, string? notificationText = null,
-        CancellationToken ct = default);
+    /// <summary>
+    /// Подтверждает нажатие кнопки. API требует непустое тело: нужно передать
+    /// либо notification, либо message — иначе возвращает 400.
+    /// </summary>
+    Task AnswerCallbackAsync(string callbackId, string notification, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -83,15 +86,13 @@ public sealed class MaxBotClient(
         await EnsureSuccessAsync(response, "POST /messages", ct);
     }
 
-    public async Task AnswerCallbackAsync(string callbackId, string? notificationText = null,
+    public async Task AnswerCallbackAsync(string callbackId, string notification,
         CancellationToken ct = default)
     {
-        object payload = notificationText is null
-            ? new { }
-            : new { message = new { text = notificationText } };
-
         using var response = await http.PostAsJsonAsync(
-            $"/answers?callback_id={Uri.EscapeDataString(callbackId)}", payload, Json, ct);
+            $"/answers?callback_id={Uri.EscapeDataString(callbackId)}",
+            new { notification }, Json, ct);
+
         await EnsureSuccessAsync(response, "POST /answers", ct);
     }
 

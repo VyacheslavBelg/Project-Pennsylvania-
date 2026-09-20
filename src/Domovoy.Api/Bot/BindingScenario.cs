@@ -106,8 +106,9 @@ public sealed class BindingScenario(
 
         var user = await EnsureUserAsync(callback.User.UserId, chatId.Value, callback.User.Name, ct);
 
-        // Отвечаем платформе сразу, иначе кнопка остаётся в состоянии ожидания.
-        await max.AnswerCallbackAsync(callback.CallbackId, ct: ct);
+        // Подтверждение нажатия не должно решать судьбу действия: если платформа
+        // ответит ошибкой, пользователь всё равно получит результат.
+        await AcknowledgeAsync(callback.CallbackId, "Принято", ct);
 
         if (payload == Callbacks.BindStart || payload == Callbacks.BindReset)
         {
@@ -121,6 +122,18 @@ public sealed class BindingScenario(
             && int.TryParse(payload[Callbacks.BindPick.Length..], out var buildingId))
         {
             await BindAsync(user, buildingId, ct);
+        }
+    }
+
+    private async Task AcknowledgeAsync(string callbackId, string notification, CancellationToken ct)
+    {
+        try
+        {
+            await max.AnswerCallbackAsync(callbackId, notification, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Не удалось подтвердить нажатие кнопки, продолжаем сценарий");
         }
     }
 
@@ -145,9 +158,9 @@ public sealed class BindingScenario(
             [MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]
         ];
 
-        if (!string.IsNullOrWhiteSpace(_options.WebAppUrl))
+        if (_options.HasMiniApp)
         {
-            buttons.Insert(0, [MaxButton.OpenApp("Открыть карточку дома", _options.WebAppUrl)]);
+            buttons.Insert(0, [MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
         }
 
         await max.SendMessageAsync(user.MaxChatId, DescribeBuilding(link.Building), buttons, ct);
@@ -218,9 +231,9 @@ public sealed class BindingScenario(
         logger.LogInformation("Пользователь {User} привязан к дому {Building}", user.MaxUserId, building.Id);
 
         List<List<object>> buttons = [];
-        if (!string.IsNullOrWhiteSpace(_options.WebAppUrl))
+        if (_options.HasMiniApp)
         {
-            buttons.Add([MaxButton.OpenApp("Открыть карточку дома", _options.WebAppUrl)]);
+            buttons.Add([MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
         }
         buttons.Add([MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]);
 
