@@ -16,7 +16,24 @@ builder.Services.AddDbContext<DomovoyDbContext>(options =>
             "Не задана строка подключения ConnectionStrings__Default")));
 
 builder.Services.AddScoped<BuildingSearchService>();
+builder.Services.AddScoped<AddressLookupService>();
 builder.Services.AddScoped<BindingScenario>();
+
+// Подсказки по адресам из государственного адресного реестра. Без ключа сервис
+// работает вхолостую: поиск остаётся только по своей базе, сценарий не ломается.
+builder.Services.Configure<DaDataOptions>(builder.Configuration.GetSection(DaDataOptions.SectionName));
+builder.Services.AddHttpClient<IAddressSuggestService, DaDataAddressSuggestService>((sp, http) =>
+{
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DaDataOptions>>().Value;
+    http.BaseAddress = new Uri(options.BaseUrl);
+    http.Timeout = TimeSpan.FromSeconds(10);
+
+    if (options.IsConfigured)
+    {
+        http.DefaultRequestHeaders.Add("Authorization", $"Token {options.ApiKey}");
+        http.DefaultRequestHeaders.Add("Accept", "application/json");
+    }
+});
 
 builder.Services.Configure<MaxBotOptions>(builder.Configuration.GetSection(MaxBotOptions.SectionName));
 

@@ -22,11 +22,25 @@ public static class ApiEndpoints
     {
         app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
+        // Тот же поиск, что и у бота: сначала своя база, затем государственный
+        // адресный реестр. Дом из реестра не сохраняется до выбора пользователем.
         app.MapGet("/api/buildings/search", async (
-            string query, BuildingSearchService search, CancellationToken ct) =>
+            string query, AddressLookupService lookup, CancellationToken ct) =>
         {
-            var found = await search.SearchAsync(query, ct);
-            return Results.Ok(found.Select(ToDto));
+            var found = await lookup.FindAsync(query, ct);
+
+            return Results.Ok(found.Select(c => new
+            {
+                buildingId = c.BuildingId,
+                display = c.Display,
+                knownHouse = c.KnownHouse,
+                managingOrganization = c.ManagingOrganizationName,
+                fiasId = c.Suggested?.FiasId,
+                source = c.KnownHouse
+                    ? "Данные о доме загружены в систему"
+                    : "Адрес распознан по государственному адресному реестру (ФИАС); "
+                      + "сведений об управляющей организации нет"
+            }));
         });
 
         app.MapGet("/api/buildings/{id:int}", async (

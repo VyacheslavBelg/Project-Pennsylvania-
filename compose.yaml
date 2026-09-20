@@ -30,6 +30,7 @@ services:
       Max__BotUsername: ${MAX_BOT_USERNAME:-}
       Max__WebAppUrl: ${MAX_WEBAPP_URL:-}
       WebApp__Origins: ${WEBAPP_ORIGINS:-http://localhost:8081}
+      DaData__ApiKey: ${DADATA_API_KEY:-}
     ports:
       - "8080:8080"
     depends_on:

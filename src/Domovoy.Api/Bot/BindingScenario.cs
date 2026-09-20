@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Domovoy.Core.Data;
 using Domovoy.Core.Domain;
 using Domovoy.Core.Max;
@@ -17,7 +18,7 @@ namespace Domovoy.Api.Bot;
 /// </summary>
 public sealed class BindingScenario(
     DomovoyDbContext db,
-    BuildingSearchService search,
+    AddressLookupService lookup,
     IMaxBotClient max,
     IOptions<MaxBotOptions> options,
     ILogger<BindingScenario> logger)
@@ -32,6 +33,7 @@ public sealed class BindingScenario(
     {
         public const string BindStart = "bind:start";
         public const string BindPick = "bind:pick:";
+        public const string BindSuggested = "bind:suggested:";
         public const string BindReset = "bind:reset";
     }
 
@@ -122,6 +124,13 @@ public sealed class BindingScenario(
             && int.TryParse(payload[Callbacks.BindPick.Length..], out var buildingId))
         {
             await BindAsync(user, buildingId, ct);
+            return;
+        }
+
+        if (payload.StartsWith(Callbacks.BindSuggested, StringComparison.Ordinal)
+            && int.TryParse(payload[Callbacks.BindSuggested.Length..], out var suggestedIndex))
+        {
+            await BindSuggestedAsync(user, suggestedIndex, ct);
         }
     }
 
@@ -168,33 +177,81 @@ public sealed class BindingScenario(
 
     private async Task SearchAndOfferAsync(AppUser user, string query, CancellationToken ct)
     {
-        var found = await search.SearchAsync(query, ct);
+        var found = await lookup.FindAsync(query, ct);
 
         if (found.Count == 0)
         {
             await max.SendMessageAsync(user.MaxChatId,
-                "Такой адрес не найден.\n\n"
-                + "В демонстрационной версии доступны дома из подготовленного набора по Казани: "
-                + "Баумана 15 и 17, Профсоюзная 23, Ямашева 54 и 56, Чистопольская 78, Декабристов 112.",
+                "Такой адрес не найден. Попробуйте указать улицу и номер дома — например, «Баумана 15».",
                 ct: ct);
             return;
         }
 
-        var buttons = found
-            .Select(b => new List<object>
-            {
-                MaxButton.Callback($"{b.Address.Street}, д. {b.Address.House}", $"{Callbacks.BindPick}{b.Id}")
-            })
-            .ToList();
+        // Варианты из адресного реестра ещё не сохранены, поэтому держим их в состоянии
+        // диалога, а в кнопку кладём только позицию в списке.
+        var suggested = found.Where(c => !c.KnownHouse).Select(c => c.Suggested!).ToList();
+        if (suggested.Count > 0)
+        {
+            await SetStepAsync(user, Steps.AwaitingAddress, ct, JsonSerializer.Serialize(suggested));
+        }
 
-        await max.SendMessageAsync(user.MaxChatId,
-            found.Count == 1 ? "Нашёлся один дом. Это он?" : $"Нашлось домов: {found.Count}. Выберите свой.",
-            buttons, ct);
+        var buttons = new List<List<object>>();
+        var suggestedIndex = 0;
+
+        foreach (var candidate in found)
+        {
+            var payload = candidate.KnownHouse
+                ? $"{Callbacks.BindPick}{candidate.BuildingId}"
+                : $"{Callbacks.BindSuggested}{suggestedIndex++}";
+
+            buttons.Add([MaxButton.Callback(Shorten(candidate.Display), payload)]);
+        }
+
+        var header = found.Count == 1
+            ? "Нашёлся один дом. Это он?"
+            : $"Нашлось домов: {found.Count}. Выберите свой.";
+
+        if (found.All(c => !c.KnownHouse))
+        {
+            header += "\n\nАдрес распознан по государственному адресному реестру. "
+                + "Сведений об управляющей организации этого дома у нас пока нет.";
+        }
+
+        await max.SendMessageAsync(user.MaxChatId, header, buttons, ct);
+    }
+
+    /// <summary>Подписи кнопок ограничены по длине, а адреса из реестра бывают длинными.</summary>
+    private static string Shorten(string text) =>
+        text.Length <= 60 ? text : text[..57] + "…";
+
+    private async Task BindSuggestedAsync(AppUser user, int index, CancellationToken ct)
+    {
+        var state = user.DialogState
+            ?? await db.DialogStates.FirstOrDefaultAsync(s => s.AppUserId == user.Id, ct);
+
+        var stored = state?.PayloadJson is { Length: > 0 } json
+            ? JsonSerializer.Deserialize<List<SuggestedAddress>>(json)
+            : null;
+
+        if (stored is null || index < 0 || index >= stored.Count)
+        {
+            await SetStepAsync(user, Steps.AwaitingAddress, ct);
+            await max.SendMessageAsync(user.MaxChatId,
+                "Не удалось восстановить выбранный адрес. Введите его ещё раз.", ct: ct);
+            return;
+        }
+
+        var building = await lookup.EnsureBuildingAsync(stored[index], ct);
+        await BindAsync(user, building.Id, ct);
     }
 
     private async Task BindAsync(AppUser user, int buildingId, CancellationToken ct)
     {
-        var building = await search.GetAsync(buildingId, ct);
+        var building = await db.Buildings
+            .Include(b => b.Address)
+            .Include(b => b.ManagingOrganization)
+            .FirstOrDefaultAsync(b => b.Id == buildingId, ct);
+
         if (building is null)
         {
             await max.SendMessageAsync(user.MaxChatId, "Этот дом больше недоступен, попробуйте ещё раз.", ct: ct);
@@ -250,16 +307,25 @@ public sealed class BindingScenario(
             sb.AppendLine($"Управление: {org.Name}");
             if (!string.IsNullOrWhiteSpace(org.Phone)) sb.AppendLine($"Телефон: {org.Phone}");
             if (!string.IsNullOrWhiteSpace(org.EmergencyPhone)) sb.AppendLine($"Аварийная служба: {org.EmergencyPhone}");
-        }
 
-        var kind = b.ManagementKind switch
+            var kind = b.ManagementKind switch
+            {
+                ManagementKind.ManagementCompany => "управляющая организация",
+                ManagementKind.Hoa => "ТСЖ",
+                ManagementKind.Direct => "непосредственное управление",
+                _ => "не указан"
+            };
+            sb.AppendLine($"Способ управления: {kind}");
+        }
+        else
         {
-            ManagementKind.ManagementCompany => "управляющая организация",
-            ManagementKind.Hoa => "ТСЖ",
-            ManagementKind.Direct => "непосредственное управление",
-            _ => "не указан"
-        };
-        sb.AppendLine($"Способ управления: {kind}");
+            // Адрес распознан, но региональные данные не загружены. Это не ошибка,
+            // а граница между ядром продукта и переменной частью.
+            sb.AppendLine();
+            sb.AppendLine("Сведений об управляющей организации этого дома у нас пока нет — они загружаются");
+            sb.AppendLine("при подключении региона или напрямую от управляющей организации.");
+            sb.AppendLine("Нормативные сроки федеральные, поэтому их продукт подскажет и для вашего дома.");
+        }
 
         if (b.BuildYear is { } year) sb.AppendLine($"Год постройки: {year}");
 
@@ -305,7 +371,8 @@ public sealed class BindingScenario(
         return user;
     }
 
-    private async Task SetStepAsync(AppUser user, string step, CancellationToken ct)
+    private async Task SetStepAsync(AppUser user, string step, CancellationToken ct,
+        string? payloadJson = null)
     {
         var state = user.DialogState ?? await db.DialogStates.FirstOrDefaultAsync(s => s.AppUserId == user.Id, ct);
 
@@ -315,12 +382,14 @@ public sealed class BindingScenario(
             {
                 AppUserId = user.Id,
                 Step = step,
+                PayloadJson = payloadJson,
                 UpdatedAt = DateTimeOffset.UtcNow
             });
         }
         else
         {
             state.Step = step;
+            state.PayloadJson = payloadJson;
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
