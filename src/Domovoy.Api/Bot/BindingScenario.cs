@@ -162,17 +162,29 @@ public sealed class BindingScenario(
             return;
         }
 
-        List<List<object>> buttons =
-        [
-            [MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]
-        ];
+        await max.SendMessageAsync(user.MaxChatId,
+            DescribeBuilding(link.Building), BuildingButtons(link.Building), ct);
+    }
+
+    /// <summary>Официальный реестр лицензий — законный способ узнать свою управляющую организацию.</summary>
+    private const string LicenseRegistryUrl = "https://dom.gosuslugi.ru/#!/licenses";
+
+    private List<List<object>> BuildingButtons(Building building)
+    {
+        List<List<object>> buttons = [];
 
         if (_options.HasMiniApp)
         {
-            buttons.Insert(0, [MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
+            buttons.Add([MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
         }
 
-        await max.SendMessageAsync(user.MaxChatId, DescribeBuilding(link.Building), buttons, ct);
+        if (building.ManagingOrganization is null)
+        {
+            buttons.Add([MaxButton.Link("Найти свою УК в реестре", LicenseRegistryUrl)]);
+        }
+
+        buttons.Add([MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]);
+        return buttons;
     }
 
     private async Task SearchAndOfferAsync(AppUser user, string query, CancellationToken ct)
@@ -287,14 +299,8 @@ public sealed class BindingScenario(
 
         logger.LogInformation("Пользователь {User} привязан к дому {Building}", user.MaxUserId, building.Id);
 
-        List<List<object>> buttons = [];
-        if (_options.HasMiniApp)
-        {
-            buttons.Add([MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
-        }
-        buttons.Add([MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]);
-
-        await max.SendMessageAsync(user.MaxChatId, "Дом привязан.\n\n" + DescribeBuilding(building), buttons, ct);
+        await max.SendMessageAsync(user.MaxChatId,
+            "Дом привязан.\n\n" + DescribeBuilding(building), BuildingButtons(building), ct);
     }
 
     private static string DescribeBuilding(Building b)
