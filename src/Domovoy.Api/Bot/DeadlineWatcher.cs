@@ -1,6 +1,7 @@
 using Domovoy.Core.Data;
 using Domovoy.Core.Domain;
 using Domovoy.Core.Max;
+using Domovoy.Core.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Domovoy.Api.Bot;
@@ -107,10 +108,11 @@ public sealed class DeadlineWatcher(
         {
             await max.SendMessageAsync(request.AppUser.MaxChatId,
                 $"Напоминание: срок ответа по обращению «{request.ProblemCategory.Title}» "
-                + $"истекает {deadline.ToLocalTime():dd.MM.yyyy HH:mm}.\n\n"
+                + $"истекает {DateText.DateTime(deadline)}.\n\n"
                 + "Если ответ уже получен — отметьте это, чтобы я не беспокоил.",
                 [
-                    [MaxButton.Callback("Мне уже ответили", $"{ProblemScenario.Callbacks.Answered}{request.Id}")]
+                    [MaxButton.Callback("Мне уже ответили", $"{ProblemScenario.Callbacks.Answered}{request.Id}")],
+                    BotUi.MenuRow
                 ], ct);
         }
         catch (Exception ex)
@@ -126,13 +128,14 @@ public sealed class DeadlineWatcher(
         {
             await max.SendMessageAsync(request.AppUser.MaxChatId,
                 $"Срок по обращению «{request.ProblemCategory.Title}» истёк "
-                + $"{request.DeadlineAt!.Value.ToLocalTime():dd.MM.yyyy HH:mm}, ответа нет.\n\n"
+                + $"{DateText.DateTime(request.DeadlineAt!.Value)}, ответа нет.\n\n"
                 + $"Норматив: {request.DeadlineDescription}, основание: {request.DeadlineLegalBasis}.\n\n"
                 + "Это основание для жалобы в жилищную инспекцию. Могу собрать готовый текст "
                 + "с датами и нормами — останется только отправить.",
                 [
                     [MaxButton.Callback("Собрать жалобу в инспекцию", $"{ProblemScenario.Callbacks.Escalate}{request.Id}")],
-                    [MaxButton.Callback("Мне уже ответили", $"{ProblemScenario.Callbacks.Answered}{request.Id}")]
+                    [MaxButton.Callback("Мне уже ответили", $"{ProblemScenario.Callbacks.Answered}{request.Id}")],
+                    BotUi.MenuRow
                 ], ct);
 
             logger.LogInformation("Срок по обращению {Request} нарушен, пользователь уведомлён", request.Id);

@@ -15,6 +15,7 @@ public sealed class ScenarioRouter(
     DomovoyDbContext db,
     BindingScenario binding,
     ProblemScenario problem,
+    ProfileScenario profile,
     IMaxBotClient max,
     ILogger<ScenarioRouter> logger)
 {
@@ -52,6 +53,18 @@ public sealed class ScenarioRouter(
             return;
         }
 
+        if (step == ProfileScenario.Steps.AwaitingFullName)
+        {
+            await profile.SaveFullNameAsync(user, text, ct);
+            return;
+        }
+
+        if (step == ProfileScenario.Steps.AwaitingApartment)
+        {
+            await profile.SaveApartmentAsync(user, text, ct);
+            return;
+        }
+
         await binding.HandleAsync(update, ct);
     }
 
@@ -75,6 +88,20 @@ public sealed class ScenarioRouter(
             logger.LogWarning(ex, "Не удалось подтвердить нажатие кнопки, продолжаем сценарий");
         }
 
+        // Возврат в меню работает из любого шага, в том числе из чужого сценария.
+        if (payload == BotUi.MenuCallback)
+        {
+            await problem.CancelAsync(user, ct);
+            await binding.ShowEntryPointAsync(user, ct);
+            return;
+        }
+
+        if (payload.StartsWith("profile:", StringComparison.Ordinal))
+        {
+            await HandleProfileAsync(user, payload, ct);
+            return;
+        }
+
         if (!payload.StartsWith("problem:", StringComparison.Ordinal))
         {
             await binding.HandleAsync(update, ct);
@@ -87,6 +114,8 @@ public sealed class ScenarioRouter(
             return;
         }
 
+        // Кнопку с этим payload больше не рисуем, но она осталась в истории чатов:
+        // пользователь может пролистать вверх и нажать старую.
         if (payload == ProblemScenario.Callbacks.BackToMenu)
         {
             await problem.CancelAsync(user, ct);
@@ -127,6 +156,28 @@ public sealed class ScenarioRouter(
         if (TryTail(payload, ProblemScenario.Callbacks.Escalate, out var escalateId))
         {
             await problem.HandleEscalateAsync(user, escalateId, ct);
+        }
+    }
+
+    private async Task HandleProfileAsync(AppUser user, string payload, CancellationToken ct)
+    {
+        switch (payload)
+        {
+            case ProfileScenario.Callbacks.Show:
+                await profile.ShowAsync(user, ct);
+                break;
+            case ProfileScenario.Callbacks.EditName:
+                await profile.AskFullNameAsync(user, ct);
+                break;
+            case ProfileScenario.Callbacks.EditApartment:
+                await profile.AskApartmentAsync(user, ct);
+                break;
+            case ProfileScenario.Callbacks.MyRequests:
+                await profile.ShowRequestsAsync(user, ct);
+                break;
+            case ProfileScenario.Callbacks.Skip:
+                await profile.SkipAsync(user, ct);
+                break;
         }
     }
 

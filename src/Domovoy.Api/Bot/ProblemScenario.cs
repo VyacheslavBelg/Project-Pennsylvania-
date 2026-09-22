@@ -50,7 +50,7 @@ public sealed class ProblemScenario(
         var building = await GetBuildingAsync(user, ct);
         if (building is null)
         {
-            await max.SendMessageAsync(user.MaxChatId,
+            await SendAsync(user.MaxChatId,
                 "Сначала нужно привязать дом — от него зависят применимые правила.", ct: ct);
             return;
         }
@@ -62,10 +62,9 @@ public sealed class ProblemScenario(
             .ToList();
 
         // Возврат есть на каждом шаге: случайное нажатие не должно загонять в тупик.
-        buttons.Add([MaxButton.Callback("‹ Назад", Callbacks.BackToMenu)]);
 
         await SetStepAsync(user, Steps.ChoosingCategory, null, ct);
-        await max.SendMessageAsync(user.MaxChatId, "Что случилось?", buttons, ct);
+        await SendAsync(user.MaxChatId, "Что случилось?", buttons, ct);
 
         await LogAsync("scenario_started", user, building.Id, null, ct);
     }
@@ -75,7 +74,7 @@ public sealed class ProblemScenario(
         var category = await resolver.GetCategoryAsync(categoryId, ct);
         if (category is null)
         {
-            await max.SendMessageAsync(user.MaxChatId, "Категория не найдена, начните заново.", ct: ct);
+            await SendAsync(user.MaxChatId, "Категория не найдена, начните заново.", ct: ct);
             return;
         }
 
@@ -94,7 +93,7 @@ public sealed class ProblemScenario(
         buttons.Add([MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]);
 
         await SetStepAsync(user, Steps.Clarifying, new Draft(category.Id, null, null), ct);
-        await max.SendMessageAsync(user.MaxChatId,
+        await SendAsync(user.MaxChatId,
             category.ClarifyingQuestion ?? "Уточните ситуацию", buttons, ct);
     }
 
@@ -116,14 +115,14 @@ public sealed class ProblemScenario(
 
         if (category is null)
         {
-            await max.SendMessageAsync(user.MaxChatId, "Не удалось определить категорию, начните заново.", ct: ct);
+            await SendAsync(user.MaxChatId, "Не удалось определить категорию, начните заново.", ct: ct);
             return;
         }
 
         var resolution = await resolver.ResolveAsync(category, option, building, ct);
         if (resolution is null)
         {
-            await max.SendMessageAsync(user.MaxChatId,
+            await SendAsync(user.MaxChatId,
                 "Для этой ситуации у меня пока нет правила. Опишите проблему словами — "
                 + "передам её как обращение общего порядка.", ct: ct);
             return;
@@ -149,7 +148,7 @@ public sealed class ProblemScenario(
         if (resolution.Zone.Code == "resident")
         {
             await SetStepAsync(user, null, null, ct);
-            await max.SendMessageAsync(user.MaxChatId, text,
+            await SendAsync(user.MaxChatId, text,
                 [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
             return;
         }
@@ -172,7 +171,7 @@ public sealed class ProblemScenario(
 
         await SetStepAsync(user, Steps.DescribingProblem, new Draft(category.Id, option?.Id, request.Id), ct);
 
-        await max.SendMessageAsync(user.MaxChatId,
+        await SendAsync(user.MaxChatId,
             text + "\n\n———\n\nОпишите проблему своими словами — я соберу обращение. "
                  + "Или нажмите «Без описания», и я сформирую его по категории.",
             [
@@ -209,7 +208,7 @@ public sealed class ProblemScenario(
         await SetStepAsync(user, null, null, ct);
         await LogAsync("emergency_routed", user, r.Building.Id, r.Category.Code, ct);
 
-        await max.SendMessageAsync(user.MaxChatId, sb.ToString().TrimEnd(),
+        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(),
             [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
     }
 
@@ -218,7 +217,7 @@ public sealed class ProblemScenario(
         var draft = ReadDraft(user);
         if (draft?.RequestId is not { } requestId)
         {
-            await max.SendMessageAsync(user.MaxChatId, "Сессия потерялась, начните заново.", ct: ct);
+            await SendAsync(user.MaxChatId, "Сессия потерялась, начните заново.", ct: ct);
             return;
         }
 
@@ -232,17 +231,18 @@ public sealed class ProblemScenario(
 
         if (request is null)
         {
-            await max.SendMessageAsync(user.MaxChatId, "Обращение не найдено, начните заново.", ct: ct);
+            await SendAsync(user.MaxChatId, "Обращение не найдено, начните заново.", ct: ct);
             return;
         }
 
         request.Description = description;
-        request.GeneratedText = BuildRequestText(request, user);
+        var apartment = await GetApartmentAsync(user, request.BuildingId, ct);
+        request.GeneratedText = BuildRequestText(request, user, apartment);
         await db.SaveChangesAsync(ct);
 
         await SetStepAsync(user, Steps.ConfirmingSubmission, draft with { RequestId = request.Id }, ct);
 
-        await max.SendMessageAsync(user.MaxChatId,
+        await SendAsync(user.MaxChatId,
             "Готовый текст обращения — скопируйте и отправьте в управляющую организацию:\n\n"
             + "———\n" + request.GeneratedText + "\n———\n\n"
             + "Отправить обращение за вас я не могу: канала в системы управляющих организаций "
@@ -261,7 +261,7 @@ public sealed class ProblemScenario(
 
         if (request is null)
         {
-            await max.SendMessageAsync(user.MaxChatId, "Обращение не найдено.", ct: ct);
+            await SendAsync(user.MaxChatId, "Обращение не найдено.", ct: ct);
             return;
         }
 
@@ -280,8 +280,8 @@ public sealed class ProblemScenario(
 
         logger.LogInformation("Обращение {Request} отправлено, срок до {Deadline}", request.Id, request.DeadlineAt);
 
-        await max.SendMessageAsync(user.MaxChatId,
-            $"Срок пошёл. Ответ должен поступить до {request.DeadlineAt:dd.MM.yyyy HH:mm}"
+        await SendAsync(user.MaxChatId,
+            $"Срок пошёл. Ответ должен поступить до {DateText.DateTime(request.DeadlineAt!.Value)}"
             + $" — {request.DeadlineDescription}, основание: {request.DeadlineLegalBasis}.\n\n"
             + "Напомню за день до истечения. Если ответа не будет — соберу пакет для жалобы "
             + "в жилищную инспекцию.",
@@ -299,7 +299,7 @@ public sealed class ProblemScenario(
         request.Status = RequestStatus.Answered;
         await db.SaveChangesAsync(ct);
 
-        await max.SendMessageAsync(user.MaxChatId,
+        await SendAsync(user.MaxChatId,
             "Отметил, что ответ получен. Если проблему не решили по существу — "
             + "можно вернуться и подать обращение заново.",
             [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
@@ -319,12 +319,14 @@ public sealed class ProblemScenario(
         await db.SaveChangesAsync(ct);
         await LogAsync("escalation_opened", user, request.BuildingId, request.ProblemCategory.Code, ct);
 
-        await max.SendMessageAsync(user.MaxChatId, BuildEscalationText(request, user),
+        var apartment = await GetApartmentAsync(user, request.BuildingId, ct);
+
+        await SendAsync(user.MaxChatId, BuildEscalationText(request, user, apartment),
             [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
     }
 
     /// <summary>Текст обращения. Собирается из того, что пользователь уже сообщил.</summary>
-    private static string BuildRequestText(Request request, AppUser user)
+    private static string BuildRequestText(Request request, AppUser user, string? apartment)
     {
         var sb = new StringBuilder();
         var address = request.Building.Address.ToString();
@@ -335,7 +337,12 @@ public sealed class ProblemScenario(
             sb.AppendLine(org.Name);
         }
         sb.AppendLine();
-        sb.AppendLine($"От: {user.DisplayName ?? "жителя"}, {address}");
+        sb.AppendLine($"От: {Who(user)}");
+        sb.AppendLine($"Адрес: {address}{ApartmentSuffix(apartment)}");
+        if (!string.IsNullOrWhiteSpace(user.ContactInfo))
+        {
+            sb.AppendLine($"Контакт для ответа: {user.ContactInfo}");
+        }
         sb.AppendLine();
         sb.AppendLine("ОБРАЩЕНИЕ");
         sb.AppendLine();
@@ -363,7 +370,7 @@ public sealed class ProblemScenario(
         }
 
         sb.AppendLine();
-        sb.AppendLine($"Дата: {DateTimeOffset.Now:dd.MM.yyyy}");
+        sb.AppendLine($"Дата: {DateText.DocumentDate(DateTimeOffset.Now)}");
 
         return sb.ToString().TrimEnd();
     }
@@ -372,26 +379,27 @@ public sealed class ProblemScenario(
     /// Пакет для жалобы в инспекцию. Это тот шаг, на котором житель обычно сдаётся:
     /// нужно собрать даты, нормы и переписку. Здесь всё уже собрано.
     /// </summary>
-    private static string BuildEscalationText(Request request, AppUser user)
+    private static string BuildEscalationText(Request request, AppUser user, string? apartment)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Срок нарушен. Вот готовое обращение в жилищную инспекцию:");
         sb.AppendLine();
         sb.AppendLine("———");
         sb.AppendLine("В Государственную жилищную инспекцию");
-        sb.AppendLine($"От: {user.DisplayName ?? "жителя"}, {request.Building.Address}");
+        sb.AppendLine($"От: {Who(user)}");
+        sb.AppendLine($"Адрес: {request.Building.Address}{ApartmentSuffix(apartment)}");
         sb.AppendLine();
         sb.AppendLine("ЖАЛОБА");
         sb.AppendLine();
         sb.AppendLine($"Обращение по вопросу «{request.ProblemCategory.Title}» направлено "
-                      + $"{request.SubmittedAt:dd.MM.yyyy}.");
+                      + $"{DateText.Date(request.SubmittedAt!.Value)}.");
         sb.AppendLine($"Нормативный срок ответа — {request.DeadlineDescription} "
                       + $"({request.DeadlineLegalBasis}).");
-        sb.AppendLine($"Срок истёк {request.DeadlineAt:dd.MM.yyyy}. Ответ не получен.");
+        sb.AppendLine($"Срок истёк {DateText.Date(request.DeadlineAt!.Value)}. Ответ не получен.");
         sb.AppendLine();
         sb.AppendLine("Прошу провести проверку и принять меры реагирования.");
         sb.AppendLine();
-        sb.AppendLine($"Дата: {DateTimeOffset.Now:dd.MM.yyyy}");
+        sb.AppendLine($"Дата: {DateText.DocumentDate(DateTimeOffset.Now)}");
         sb.AppendLine("———");
         sb.AppendLine();
         sb.AppendLine("Подать жалобу можно через ГИС ЖКХ (dom.gosuslugi.ru), портал "
@@ -399,6 +407,19 @@ public sealed class ProblemScenario(
 
         return sb.ToString().TrimEnd();
     }
+
+    /// <summary>ФИО из профиля: имя в MAX для официального документа не годится.</summary>
+    private static string Who(AppUser user) =>
+        !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.DisplayName ?? "жителя";
+
+    private static string ApartmentSuffix(string? apartment) =>
+        string.IsNullOrWhiteSpace(apartment) ? string.Empty : $", кв. {apartment}";
+
+    private Task<string?> GetApartmentAsync(AppUser user, int buildingId, CancellationToken ct) =>
+        db.UserBuildingLinks
+            .Where(l => l.AppUserId == user.Id && l.BuildingId == buildingId)
+            .Select(l => l.Apartment)
+            .FirstOrDefaultAsync(ct);
 
     private Task<Building?> GetBuildingAsync(AppUser user, CancellationToken ct) =>
         db.UserBuildingLinks
@@ -456,4 +477,12 @@ public sealed class ProblemScenario(
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Отправка с автоматическим возвратом в меню. Через неё идут все экраны сценария,
+    /// поэтому забыть про кнопку возврата нельзя.
+    /// </summary>
+    private Task SendAsync(long chatId, string text,
+        List<List<object>>? buttons = null, CancellationToken ct = default) =>
+        max.SendMessageAsync(chatId, text, BotUi.WithMenu(buttons), ct);
 }

@@ -19,6 +19,7 @@ builder.Services.AddScoped<BuildingSearchService>();
 builder.Services.AddScoped<AddressLookupService>();
 builder.Services.AddScoped<BindingScenario>();
 builder.Services.AddScoped<ProblemScenario>();
+builder.Services.AddScoped<ProfileScenario>();
 builder.Services.AddScoped<ResponsibilityResolver>();
 builder.Services.AddScoped<ScenarioRouter>();
 
