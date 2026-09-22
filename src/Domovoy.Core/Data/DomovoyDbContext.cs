@@ -56,6 +56,8 @@ public class DomovoyDbContext(DbContextOptions<DomovoyDbContext> options) : DbCo
         {
             e.HasIndex(x => x.MaxUserId).IsUnique();
             e.Property(x => x.DisplayName).HasMaxLength(200);
+            e.Property(x => x.FullName).HasMaxLength(300);
+            e.Property(x => x.ContactInfo).HasMaxLength(200);
         });
 
         b.Entity<UserBuildingLink>(e =>
