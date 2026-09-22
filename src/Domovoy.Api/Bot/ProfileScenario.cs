@@ -31,6 +31,7 @@ public sealed class ProfileScenario(
         public const string EditName = "profile:name";
         public const string EditApartment = "profile:apartment";
         public const string MyRequests = "profile:requests";
+        public const string Card = "profile:card:";
         public const string Skip = "profile:skip";
     }
 
@@ -158,12 +159,10 @@ public sealed class ProfileScenario(
                               + $", подано {DateText.ShortDate(r.SubmittedAt ?? r.CreatedAt)}");
                 sb.AppendLine(DescribeState(r, now));
 
-                // Кнопка эскалации только там, где срок действительно нарушен.
-                if (r.Status == RequestStatus.Breached)
-                {
-                    buttons.Add([MaxButton.Callback($"Жалоба по №{r.Number}",
-                        $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
-                }
+                // Действия живут в карточке: иначе при нескольких обращениях
+                // под списком вырастает частокол кнопок.
+                buttons.Add([MaxButton.Callback(
+                    Label($"№{r.Number} · {r.ProblemCategory.Title}"), $"{Callbacks.Card}{r.Id}")]);
             }
         }
 
@@ -171,6 +170,78 @@ public sealed class ProfileScenario(
 
         await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(), buttons, ct);
     }
+
+    /// <summary>
+    /// Карточка обращения.
+    ///
+    /// Нужна не ради полноты: действия «отметить ответ» и «собрать жалобу» раньше жили
+    /// только в том сообщении, которым бот отвечал в момент события. Стоило пролистать
+    /// чат дальше — и отметить ответ было уже нечем. Здесь же снова доступен текст
+    /// обращения: без него человек, закрывший чат до того, как скопировал, терял его
+    /// насовсем.
+    /// </summary>
+    public async Task ShowRequestCardAsync(AppUser user, int requestId, CancellationToken ct)
+    {
+        var r = await db.Requests
+            .Include(x => x.ProblemCategory)
+            .Include(x => x.ResponsibilityZone)
+            .Include(x => x.Building).ThenInclude(b => b.Address)
+            .FirstOrDefaultAsync(x => x.Id == requestId && x.AppUserId == user.Id, ct);
+
+        if (r is null)
+        {
+            await SendAsync(user.MaxChatId, "Обращение не найдено.",
+                [[MaxButton.Callback("Мои обращения", Callbacks.MyRequests)]], ct);
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Обращение №{r.Number}");
+        sb.AppendLine($"🏠 {r.Building.Address}");
+        sb.AppendLine();
+        sb.AppendLine(r.ProblemCategory.Title);
+        sb.AppendLine($"Отвечает: {Lower(r.ResponsibilityZone?.Title) ?? "не определено"}");
+        sb.AppendLine($"Подано {DateText.ShortDate(r.SubmittedAt ?? r.CreatedAt)}");
+        sb.AppendLine(DescribeState(r, DateTimeOffset.UtcNow));
+
+        if (r.DeadlineDescription is { Length: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Норматив: {r.DeadlineDescription}");
+            sb.AppendLine($"Основание: {r.DeadlineLegalBasis}");
+        }
+
+        if (r.GeneratedText is { Length: > 0 } text)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Текст обращения:");
+            sb.AppendLine("———");
+            sb.AppendLine(text);
+            sb.AppendLine("———");
+        }
+
+        var buttons = new List<List<object>>();
+
+        if (r.Status is RequestStatus.Submitted or RequestStatus.Breached)
+        {
+            buttons.Add([MaxButton.Callback("Мне уже ответили",
+                $"{ProblemScenario.Callbacks.Answered}{r.Id}")]);
+        }
+
+        if (r.Status == RequestStatus.Breached)
+        {
+            buttons.Add([MaxButton.Callback("Жалоба в инспекцию",
+                $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
+        }
+
+        buttons.Add([MaxButton.Callback("‹ К списку обращений", Callbacks.MyRequests)]);
+
+        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(), buttons, ct);
+    }
+
+    /// <summary>Подпись кнопки: MAX обрезает длинные, обрезаем сами и осмысленно.</summary>
+    private static string Label(string text) =>
+        text.Length <= 34 ? text : text[..33] + "…";
 
     /// <summary>
     /// Состояние обращения — ради него список и открывают, поэтому отдельной строкой

@@ -161,6 +161,12 @@ public sealed class ScenarioRouter(
 
     private async Task HandleProfileAsync(AppUser user, string payload, CancellationToken ct)
     {
+        if (TryTail(payload, ProfileScenario.Callbacks.Card, out var cardId))
+        {
+            await profile.ShowRequestCardAsync(user, cardId, ct);
+            return;
+        }
+
         switch (payload)
         {
             case ProfileScenario.Callbacks.Show:

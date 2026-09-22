@@ -300,7 +300,7 @@ public sealed class ProblemScenario(
             + "Напомню за день до истечения. Если ответа не будет — соберу пакет для жалобы "
             + "в жилищную инспекцию.",
             [
-                [MaxButton.Callback("Мне уже ответили", $"{Callbacks.Answered}{request.Id}")],
+                [MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)],
                 [MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]
             ], ct);
     }
@@ -314,9 +314,12 @@ public sealed class ProblemScenario(
         await db.SaveChangesAsync(ct);
 
         await SendAsync(user.MaxChatId,
-            "Отметил, что ответ получен. Если проблему не решили по существу — "
-            + "можно вернуться и подать обращение заново.",
-            [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
+            $"Обращение №{request.Number}: отметил, что ответ получен. Если проблему "
+            + "не решили по существу — можно подать обращение заново.",
+            [
+                [MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)],
+                [MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]
+            ], ct);
     }
 
     public async Task HandleEscalateAsync(AppUser user, int requestId, CancellationToken ct)
@@ -336,7 +339,10 @@ public sealed class ProblemScenario(
         var apartment = await GetApartmentAsync(user, request.BuildingId, ct);
 
         await SendAsync(user.MaxChatId, BuildEscalationText(request, user, apartment),
-            [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
+            [
+                [MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)],
+                [MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]
+            ], ct);
     }
 
     /// <summary>Текст обращения. Собирается из того, что пользователь уже сообщил.</summary>
