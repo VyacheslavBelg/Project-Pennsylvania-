@@ -65,8 +65,8 @@ public sealed class LongPollingService(
         try
         {
             using var scope = services.CreateScope();
-            var scenario = scope.ServiceProvider.GetRequiredService<BindingScenario>();
-            await scenario.HandleAsync(update, ct);
+            var router = scope.ServiceProvider.GetRequiredService<ScenarioRouter>();
+            await router.HandleAsync(update, ct);
         }
         catch (Exception ex)
         {

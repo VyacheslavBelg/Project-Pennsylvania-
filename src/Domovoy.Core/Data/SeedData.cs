@@ -21,6 +21,7 @@ public static class SeedData
     {
         await SeedZonesAsync(db, ct);
         await SeedCategoriesAsync(db, ct);
+        await SeedClarifyingOptions.ApplyAsync(db, ct);
         await SeedBuildingsAsync(db, ct);
     }
 
@@ -43,7 +44,11 @@ public static class SeedData
                 "ЖК РФ"),
             Zone("ads", "Аварийно-диспетчерская служба",
                 "Аварийная ситуация: звоните в АДС, норматив ответа оператора — 5 минут.",
-                "ПП РФ от 27.03.2018 № 331"));
+                "ПП РФ от 27.03.2018 № 331"),
+            Zone("resident", "Собственник помещения",
+                "Это внутриквартирная зона: управляющая организация за неё не отвечает. "
+                + "При заливе от соседей она составляет акт, но ущерб возмещает виновник.",
+                "ЖК РФ, ст. 30"));
 
         await db.SaveChangesAsync(ct);
     }
@@ -56,8 +61,8 @@ public static class SeedData
 
         var categories = new[]
         {
-            Category("leak_emergency", "Протечка или залив прямо сейчас", 10, true,
-                "Вода поступает в квартиру в данный момент?"),
+            Category("leak_emergency", "Протечка или залив", 10, false,
+                "Откуда течёт?"),
             Category("heating", "Холодно в квартире, проблемы с отоплением", 20, false,
                 "Батареи холодные во всей квартире или только в части комнат?"),
             Category("hot_water", "Нет горячей воды или она не соответствует нормативу", 30, false,
@@ -85,8 +90,10 @@ public static class SeedData
         AddResponsibility(db, byCode["other"], zones["uk"]);
 
         // Сроки различаются на порядки и заданы разными актами — поэтому они в справочнике.
-        AddDeadline(db, byCode["leak_emergency"], 5, DeadlineUnit.Minutes,
-            "ПП РФ от 27.03.2018 № 331", "Норматив ответа оператора аварийно-диспетчерской службы.");
+        AddDeadline(db, byCode["leak_emergency"], 10, DeadlineUnit.BusinessDays,
+            "ПП РФ от 15.05.2013 № 416",
+            "Содержание общего имущества. Для аварии действует отдельный норматив — "
+            + "ответ оператора АДС в течение 5 минут, ПП РФ № 331.");
         AddDeadline(db, byCode["heating"], 3, DeadlineUnit.BusinessDays,
             "ПП РФ от 06.05.2011 № 354", "Обращение по качеству коммунальной услуги.");
         AddDeadline(db, byCode["hot_water"], 3, DeadlineUnit.BusinessDays,

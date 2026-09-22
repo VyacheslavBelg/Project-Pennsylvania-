@@ -14,12 +14,14 @@ public class DomovoyDbContext(DbContextOptions<DomovoyDbContext> options) : DbCo
     public DbSet<UserBuildingLink> UserBuildingLinks => Set<UserBuildingLink>();
     public DbSet<DialogState> DialogStates => Set<DialogState>();
     public DbSet<TelemetryEvent> TelemetryEvents => Set<TelemetryEvent>();
+    public DbSet<Request> Requests => Set<Request>();
 
     // Переменная часть
     public DbSet<ProblemCategory> ProblemCategories => Set<ProblemCategory>();
     public DbSet<ResponsibilityZone> ResponsibilityZones => Set<ResponsibilityZone>();
     public DbSet<CategoryResponsibility> CategoryResponsibilities => Set<CategoryResponsibility>();
     public DbSet<NormativeDeadline> NormativeDeadlines => Set<NormativeDeadline>();
+    public DbSet<ClarifyingOption> ClarifyingOptions => Set<ClarifyingOption>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -100,6 +102,34 @@ public class DomovoyDbContext(DbContextOptions<DomovoyDbContext> options) : DbCo
                 .HasForeignKey(x => x.ProblemCategoryId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.ResponsibilityZone).WithMany(z => z.Responsibilities)
                 .HasForeignKey(x => x.ResponsibilityZoneId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ClarifyingOption>(e =>
+        {
+            e.HasOne(x => x.ProblemCategory).WithMany(c => c.ClarifyingOptions)
+                .HasForeignKey(x => x.ProblemCategoryId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ResponsibilityZone).WithMany()
+                .HasForeignKey(x => x.ResponsibilityZoneId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.Text).HasMaxLength(200);
+            e.Property(x => x.LegalBasis).HasMaxLength(300);
+        });
+
+        b.Entity<Request>(e =>
+        {
+            e.HasOne(x => x.AppUser).WithMany().HasForeignKey(x => x.AppUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Building).WithMany().HasForeignKey(x => x.BuildingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ProblemCategory).WithMany().HasForeignKey(x => x.ProblemCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ClarifyingOption).WithMany().HasForeignKey(x => x.ClarifyingOptionId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ResponsibilityZone).WithMany().HasForeignKey(x => x.ResponsibilityZoneId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.DeadlineDescription).HasMaxLength(100);
+            e.Property(x => x.DeadlineLegalBasis).HasMaxLength(300);
+            // Фоновая проверка сроков ходит именно по этим полям.
+            e.HasIndex(x => new { x.Status, x.DeadlineAt });
         });
 
         b.Entity<NormativeDeadline>(e =>

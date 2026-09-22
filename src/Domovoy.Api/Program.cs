@@ -18,6 +18,9 @@ builder.Services.AddDbContext<DomovoyDbContext>(options =>
 builder.Services.AddScoped<BuildingSearchService>();
 builder.Services.AddScoped<AddressLookupService>();
 builder.Services.AddScoped<BindingScenario>();
+builder.Services.AddScoped<ProblemScenario>();
+builder.Services.AddScoped<ResponsibilityResolver>();
+builder.Services.AddScoped<ScenarioRouter>();
 
 // Подсказки по адресам из государственного адресного реестра. Без ключа сервис
 // работает вхолостую: поиск остаётся только по своей базе, сценарий не ломается.
@@ -53,6 +56,7 @@ builder.Services.AddHttpClient<IMaxBotClient, MaxBotClient>((sp, http) =>
 });
 
 builder.Services.AddHostedService<LongPollingService>();
+builder.Services.AddHostedService<DeadlineWatcher>();
 
 // Мини-приложение раздаётся с другого домена, поэтому нужен явный список источников.
 const string CorsPolicy = "webapp";

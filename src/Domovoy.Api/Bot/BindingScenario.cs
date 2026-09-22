@@ -166,21 +166,17 @@ public sealed class BindingScenario(
             DescribeBuilding(link.Building), BuildingButtons(link.Building), ct);
     }
 
-    /// <summary>Официальный реестр лицензий — законный способ узнать свою управляющую организацию.</summary>
-    private const string LicenseRegistryUrl = "https://dom.gosuslugi.ru/#!/licenses";
-
     private List<List<object>> BuildingButtons(Building building)
     {
-        List<List<object>> buttons = [];
+        // Главное действие — первым: ради него продукт и существует.
+        List<List<object>> buttons =
+        [
+            [MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)]
+        ];
 
         if (_options.HasMiniApp)
         {
             buttons.Add([MaxButton.Link("Открыть карточку дома", _options.MiniAppLink())]);
-        }
-
-        if (building.ManagingOrganization is null)
-        {
-            buttons.Add([MaxButton.Link("Найти свою УК в реестре", LicenseRegistryUrl)]);
         }
 
         buttons.Add([MaxButton.Callback("Выбрать другой дом", Callbacks.BindReset)]);

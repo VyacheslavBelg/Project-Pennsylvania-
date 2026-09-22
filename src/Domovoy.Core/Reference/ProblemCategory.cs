@@ -31,4 +31,5 @@ public class ProblemCategory
 
     public List<CategoryResponsibility> Responsibilities { get; set; } = [];
     public List<NormativeDeadline> Deadlines { get; set; } = [];
+    public List<ClarifyingOption> ClarifyingOptions { get; set; } = [];
 }
