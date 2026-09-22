@@ -81,9 +81,16 @@ public sealed class ScenarioRouter(
             return;
         }
 
-        if (payload == ProblemScenario.Callbacks.Start)
+        if (payload is ProblemScenario.Callbacks.Start or ProblemScenario.Callbacks.BackToCategories)
         {
             await problem.StartAsync(user, ct);
+            return;
+        }
+
+        if (payload == ProblemScenario.Callbacks.BackToMenu)
+        {
+            await problem.CancelAsync(user, ct);
+            await binding.ShowEntryPointAsync(user, ct);
             return;
         }
 

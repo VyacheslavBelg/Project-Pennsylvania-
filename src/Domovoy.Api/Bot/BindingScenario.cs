@@ -35,6 +35,7 @@ public sealed class BindingScenario(
         public const string BindPick = "bind:pick:";
         public const string BindSuggested = "bind:suggested:";
         public const string BindReset = "bind:reset";
+        public const string ShowHouse = "bind:house";
     }
 
     private readonly MaxBotOptions _options = options.Value;
@@ -88,7 +89,29 @@ public sealed class BindingScenario(
             return;
         }
 
-        await ShowEntryPointAsync(user, ct);
+        // Произвольный текст не должен выглядеть как команда: повторять всю карточку дома
+        // на каждое «привет» сбивает с толку. Короткая подсказка с действиями понятнее.
+        await ShowHintAsync(user, ct);
+    }
+
+    private async Task ShowHintAsync(AppUser user, CancellationToken ct)
+    {
+        var hasBuilding = await db.UserBuildingLinks.AnyAsync(l => l.AppUserId == user.Id, ct);
+
+        if (!hasBuilding)
+        {
+            await max.SendMessageAsync(user.MaxChatId,
+                "Я понимаю команды и кнопки. Начнём с дома — он определяет применимые правила.",
+                [[MaxButton.Callback("Привязать дом", Callbacks.BindStart)]], ct);
+            return;
+        }
+
+        await max.SendMessageAsync(user.MaxChatId,
+            "Свободный текст я пока не разбираю. Выберите действие или отправьте /start.",
+            [
+                [MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)],
+                [MaxButton.Callback("Мой дом", Callbacks.ShowHouse)]
+            ], ct);
     }
 
     private async Task HandleCallbackAsync(MaxUpdate update, CancellationToken ct)
@@ -111,6 +134,12 @@ public sealed class BindingScenario(
         // Подтверждение нажатия не должно решать судьбу действия: если платформа
         // ответит ошибкой, пользователь всё равно получит результат.
         await AcknowledgeAsync(callback.CallbackId, "Принято", ct);
+
+        if (payload == Callbacks.ShowHouse)
+        {
+            await ShowEntryPointAsync(user, ct);
+            return;
+        }
 
         if (payload == Callbacks.BindStart || payload == Callbacks.BindReset)
         {
@@ -146,7 +175,7 @@ public sealed class BindingScenario(
         }
     }
 
-    private async Task ShowEntryPointAsync(AppUser user, CancellationToken ct)
+    public async Task ShowEntryPointAsync(AppUser user, CancellationToken ct)
     {
         var link = await db.UserBuildingLinks
             .Include(l => l.Building).ThenInclude(b => b.Address)

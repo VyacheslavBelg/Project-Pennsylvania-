@@ -38,6 +38,8 @@ public sealed class ProblemScenario(
         public const string Submitted = "problem:sent:";
         public const string Answered = "problem:answered:";
         public const string Escalate = "problem:escalate:";
+        public const string BackToMenu = "problem:back:menu";
+        public const string BackToCategories = "problem:back:cats";
     }
 
     /// <summary>Состояние сценария между шагами. Лежит в базе, поэтому переживает перезапуск.</summary>
@@ -58,6 +60,9 @@ public sealed class ProblemScenario(
         var buttons = categories
             .Select(c => new List<object> { MaxButton.Callback(c.Title, $"{Callbacks.Category}{c.Id}") })
             .ToList();
+
+        // Возврат есть на каждом шаге: случайное нажатие не должно загонять в тупик.
+        buttons.Add([MaxButton.Callback("‹ Назад", Callbacks.BackToMenu)]);
 
         await SetStepAsync(user, Steps.ChoosingCategory, null, ct);
         await max.SendMessageAsync(user.MaxChatId, "Что случилось?", buttons, ct);
@@ -86,6 +91,8 @@ public sealed class ProblemScenario(
             .Select(o => new List<object> { MaxButton.Callback(o.Text, $"{Callbacks.Option}{o.Id}") })
             .ToList();
 
+        buttons.Add([MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]);
+
         await SetStepAsync(user, Steps.Clarifying, new Draft(category.Id, null, null), ct);
         await max.SendMessageAsync(user.MaxChatId,
             category.ClarifyingQuestion ?? "Уточните ситуацию", buttons, ct);
@@ -93,6 +100,10 @@ public sealed class ProblemScenario(
 
     public Task HandleOptionAsync(AppUser user, int optionId, CancellationToken ct) =>
         ResolveAndShowAsync(user, null, optionId, ct);
+
+    /// <summary>Выход из сценария: шаг и черновик сбрасываются.</summary>
+    public Task CancelAsync(AppUser user, CancellationToken ct) =>
+        SetStepAsync(user, null, null, ct);
 
     private async Task ResolveAndShowAsync(AppUser user, int? categoryId, int? optionId, CancellationToken ct)
     {
@@ -164,7 +175,10 @@ public sealed class ProblemScenario(
         await max.SendMessageAsync(user.MaxChatId,
             text + "\n\n———\n\nОпишите проблему своими словами — я соберу обращение. "
                  + "Или нажмите «Без описания», и я сформирую его по категории.",
-            [[MaxButton.Callback("Без описания", Callbacks.SkipDescription)]], ct);
+            [
+                [MaxButton.Callback("Без описания", Callbacks.SkipDescription)],
+                [MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]
+            ], ct);
     }
 
     private async Task ShowEmergencyAsync(AppUser user, Resolution r, CancellationToken ct)

@@ -63,14 +63,14 @@ public static class SeedData
         {
             Category("leak_emergency", "Протечка или залив", 10, false,
                 "Откуда течёт?"),
-            Category("heating", "Холодно в квартире, проблемы с отоплением", 20, false,
-                "Батареи холодные во всей квартире или только в части комнат?"),
-            Category("hot_water", "Нет горячей воды или она не соответствует нормативу", 30, false,
-                "Вода отсутствует полностью или идёт недостаточно горячей?"),
-            Category("common_area", "Содержание подъезда, лифта, двора", 40, false,
+            Category("heating", "Отопление, холодно", 20, false,
+                "Где именно холодно?"),
+            Category("hot_water", "Горячая вода", 30, false,
+                "Что с горячей водой?"),
+            Category("common_area", "Подъезд, лифт, двор", 40, false,
                 "Где именно возникла проблема?"),
-            Category("waste", "Вывоз мусора и состояние площадки", 50, false, null),
-            Category("billing", "Вопросы по начислениям и тарифам", 60, false, null),
+            Category("waste", "Мусор и площадка", 50, false, "Что именно с мусором?"),
+            Category("billing", "Начисления и тарифы", 60, false, "По какой части начислений вопрос?"),
             Category("other", "Другой вопрос по дому", 90, false, null)
         };
 
@@ -148,18 +148,28 @@ public static class SeedData
     };
 
     private static ProblemCategory Category(
-        string code, string title, int sort, bool isEmergency, string? question) => new()
+        string code, string title, int sort, bool isEmergency, string? question)
     {
-        Code = code,
-        Title = title,
-        SortOrder = sort,
-        IsEmergency = isEmergency,
-        ClarifyingQuestion = question,
-        Source = DataSource.Official,
-        SourceName = "Составлено по ЖК РФ и правилам предоставления коммунальных услуг",
-        ActualAt = Today,
-        Territory = "РФ"
-    };
+        // Название категории — это подпись кнопки: длинный текст в MAX обрезается.
+        if (title.Length > SeedClarifyingOptions.MaxButtonLabel)
+        {
+            throw new InvalidOperationException(
+                $"Название «{title}» длиннее {SeedClarifyingOptions.MaxButtonLabel} символов.");
+        }
+
+        return new ProblemCategory
+        {
+            Code = code,
+            Title = title,
+            SortOrder = sort,
+            IsEmergency = isEmergency,
+            ClarifyingQuestion = question,
+            Source = DataSource.Official,
+            SourceName = "Составлено по ЖК РФ и правилам предоставления коммунальных услуг",
+            ActualAt = Today,
+            Territory = "РФ"
+        };
+    }
 
     private static void AddResponsibility(
         DomovoyDbContext db, ProblemCategory category, ResponsibilityZone zone,
