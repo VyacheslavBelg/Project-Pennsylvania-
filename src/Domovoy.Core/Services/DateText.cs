@@ -29,6 +29,18 @@ public static class DateText
         return $"{Date(value)}, {local:HH}:{local:mm}";
     }
 
+    /// <summary>
+    /// «25 сентября» для текущего года, иначе с годом. Для списков, где год повторяется
+    /// в каждой строке и ничего не добавляет.
+    /// </summary>
+    public static string ShortDate(DateTimeOffset value)
+    {
+        var local = value.ToLocalTime();
+        return local.Year == DateTimeOffset.Now.Year
+            ? $"{local.Day} {Months[local.Month - 1]}"
+            : Date(value);
+    }
+
     /// <summary>«25 сентября 2026 г.» — для текста обращения.</summary>
     public static string DocumentDate(DateTimeOffset value) => $"{Date(value)} г.";
 }

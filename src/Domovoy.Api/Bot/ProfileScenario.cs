@@ -113,14 +113,20 @@ public sealed class ProfileScenario(
         await ShowAsync(user, ct);
     }
 
-    /// <summary>Список обращений: раньше пользователь не мог увидеть, что уже отправил.</summary>
+    /// <summary>
+    /// Список обращений.
+    ///
+    /// Группировка по дому здесь не украшение: привязку можно сменить, и тогда в списке
+    /// оказываются обращения по разным адресам. Без заголовка непонятно, какое к какому.
+    /// </summary>
     public async Task ShowRequestsAsync(AppUser user, CancellationToken ct)
     {
         var requests = await db.Requests
             .Include(r => r.ProblemCategory)
             .Include(r => r.ResponsibilityZone)
+            .Include(r => r.Building).ThenInclude(b => b.Address)
             .Where(r => r.AppUserId == user.Id && r.Status != RequestStatus.Draft)
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt)
             .Take(10)
             .ToListAsync(ct);
 
@@ -134,23 +140,30 @@ public sealed class ProfileScenario(
 
         var now = DateTimeOffset.UtcNow;
         var sb = new StringBuilder();
-        sb.AppendLine($"Ваши обращения: {requests.Count}");
+        sb.Append($"Мои обращения: {requests.Count}");
 
         var buttons = new List<List<object>>();
 
-        foreach (var r in requests)
+        foreach (var atAddress in requests.GroupBy(r => r.Building.Address.ToString()))
         {
             sb.AppendLine();
-            sb.AppendLine($"№{r.Id} · {r.ProblemCategory.Title}");
-            sb.AppendLine($"Отвечает: {r.ResponsibilityZone?.Title ?? "не определено"}");
-            sb.AppendLine($"Подано: {DateText.Date(r.SubmittedAt ?? r.CreatedAt)}");
-            sb.AppendLine($"Статус: {DescribeStatus(r, now)}");
+            sb.AppendLine();
+            sb.AppendLine($"🏠 {atAddress.Key}");
 
-            // Кнопка эскалации только там, где срок действительно нарушен.
-            if (r.Status == RequestStatus.Breached)
+            foreach (var r in atAddress)
             {
-                buttons.Add([MaxButton.Callback($"Жалоба по №{r.Id}",
-                    $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
+                sb.AppendLine();
+                sb.AppendLine($"№{r.Number} · {r.ProblemCategory.Title}");
+                sb.AppendLine($"Отвечает: {Lower(r.ResponsibilityZone?.Title) ?? "не определено"}"
+                              + $", подано {DateText.ShortDate(r.SubmittedAt ?? r.CreatedAt)}");
+                sb.AppendLine(DescribeState(r, now));
+
+                // Кнопка эскалации только там, где срок действительно нарушен.
+                if (r.Status == RequestStatus.Breached)
+                {
+                    buttons.Add([MaxButton.Callback($"Жалоба по №{r.Number}",
+                        $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
+                }
             }
         }
 
@@ -159,17 +172,29 @@ public sealed class ProfileScenario(
         await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(), buttons, ct);
     }
 
-    private static string DescribeStatus(Request r, DateTimeOffset now) => r.Status switch
+    /// <summary>
+    /// Состояние обращения — ради него список и открывают, поэтому отдельной строкой
+    /// и со знаком: «просрочено» должно быть видно, не вчитываясь.
+    /// </summary>
+    private static string DescribeState(Request r, DateTimeOffset now) => r.Status switch
     {
         RequestStatus.Submitted when r.DeadlineAt is { } d =>
-            $"ждём ответа, {DeadlineCalculator.DescribeRemaining(d, now)}",
-        RequestStatus.Submitted => "ждём ответа",
-        RequestStatus.Answered => "ответ получен",
-        RequestStatus.Breached => "срок нарушен, можно жаловаться в инспекцию",
-        RequestStatus.Escalated => "жалоба в инспекцию подготовлена",
-        RequestStatus.Closed => "закрыто",
-        _ => "черновик"
+            $"⏳ Ответ до {DateText.ShortDate(d)} — {DeadlineCalculator.DescribeRemaining(d, now)}",
+        RequestStatus.Submitted => "⏳ Ждём ответа",
+        RequestStatus.Answered => "✅ Ответ получен",
+        RequestStatus.Breached when r.DeadlineAt is { } d =>
+            $"❗ Срок истёк {DateText.ShortDate(d)}, ответа нет",
+        RequestStatus.Breached => "❗ Срок нарушен, можно жаловаться в инспекцию",
+        RequestStatus.Escalated => "📨 Жалоба в инспекцию подготовлена",
+        RequestStatus.Closed => "Закрыто",
+        _ => "Черновик"
     };
+
+    /// <summary>Название зоны внутри фразы — со строчной, но аббревиатуру не трогаем.</summary>
+    private static string? Lower(string? title) =>
+        title is { Length: > 1 } && char.IsLower(title[1])
+            ? char.ToLowerInvariant(title[0]) + title[1..]
+            : title;
 
     private async Task SetStepAsync(AppUser user, string? step, CancellationToken ct)
     {

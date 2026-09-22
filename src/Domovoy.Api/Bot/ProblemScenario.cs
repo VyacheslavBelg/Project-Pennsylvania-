@@ -153,6 +153,16 @@ public sealed class ProblemScenario(
             return;
         }
 
+        // Брошенный черновик остаётся, если пользователь ушёл с экрана описания.
+        // Копить их незачем: на список они не попадают, а место занимают.
+        var abandoned = await db.Requests
+            .Where(r => r.AppUserId == user.Id && r.Status == RequestStatus.Draft)
+            .ToListAsync(ct);
+        if (abandoned.Count > 0)
+        {
+            db.Requests.RemoveRange(abandoned);
+        }
+
         var request = new Request
         {
             AppUserId = user.Id,
@@ -268,6 +278,9 @@ public sealed class ProblemScenario(
         var now = DateTimeOffset.UtcNow;
         request.Status = RequestStatus.Submitted;
         request.SubmittedAt = now;
+        request.Number = (await db.Requests
+            .Where(r => r.AppUserId == user.Id)
+            .MaxAsync(r => (int?)r.Number, ct) ?? 0) + 1;
 
         var deadline = request.ProblemCategory.Deadlines.FirstOrDefault();
         request.DeadlineAt = deadline is not null
@@ -281,7 +294,8 @@ public sealed class ProblemScenario(
         logger.LogInformation("Обращение {Request} отправлено, срок до {Deadline}", request.Id, request.DeadlineAt);
 
         await SendAsync(user.MaxChatId,
-            $"Срок пошёл. Ответ должен поступить до {DateText.DateTime(request.DeadlineAt!.Value)}"
+            $"Обращение №{request.Number} принято к отсчёту.\n\n"
+            + $"Ответ должен поступить до {DateText.DateTime(request.DeadlineAt!.Value)}"
             + $" — {request.DeadlineDescription}, основание: {request.DeadlineLegalBasis}.\n\n"
             + "Напомню за день до истечения. Если ответа не будет — соберу пакет для жалобы "
             + "в жилищную инспекцию.",

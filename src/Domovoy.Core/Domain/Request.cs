@@ -33,6 +33,14 @@ public class Request
 {
     public int Id { get; set; }
 
+    /// <summary>
+    /// Номер обращения для пользователя — сквозной в пределах его списка.
+    /// Идентификатор строки для этого не годится: он общий на всех, и брошенные
+    /// черновики выедали бы из нумерации дыры. Присваивается в момент отправки,
+    /// поэтому у черновика он нулевой.
+    /// </summary>
+    public int Number { get; set; }
+
     public int AppUserId { get; set; }
     public AppUser AppUser { get; set; } = null!;
 
