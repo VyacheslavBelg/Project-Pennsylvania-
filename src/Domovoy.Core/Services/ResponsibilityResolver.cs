@@ -104,7 +104,7 @@ public sealed class ResponsibilityResolver(DomovoyDbContext db)
 
             if (deadlineAt is { } at)
             {
-                sb.AppendLine($"Ответ должен поступить до {at.ToLocalTime():dd.MM.yyyy HH:mm}");
+                sb.AppendLine($"Ответ должен поступить до {DateText.DateTime(at)}");
             }
         }
 
