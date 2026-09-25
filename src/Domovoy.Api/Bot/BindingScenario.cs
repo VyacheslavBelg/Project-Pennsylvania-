@@ -236,44 +236,72 @@ public sealed class BindingScenario(
             await SetStepAsync(user, Steps.AwaitingAddress, ct, JsonSerializer.Serialize(suggested));
         }
 
-        var (common, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
+        var (_, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(found.Count == 1
+            ? "Нашёлся один дом. Это он?"
+            : $"Нашлось домов: {found.Count}. Выберите свой.");
 
         var buttons = new List<List<object>>();
         var suggestedIndex = 0;
 
         for (var i = 0; i < found.Count; i++)
         {
+            // Полный адрес — в тексте: там нет ограничения длины и видно, чем варианты
+            // отличаются. Кнопка несёт номер строки и столько адреса, сколько влезло.
+            sb.AppendLine();
+            sb.Append($"{i + 1} · {found[i].Display}");
+
             var payload = found[i].KnownHouse
                 ? $"{Callbacks.BindPick}{found[i].BuildingId}"
                 : $"{Callbacks.BindSuggested}{suggestedIndex++}";
 
-            buttons.Add([MaxButton.Callback(Shorten(tails[i]), payload)]);
-        }
-
-        var header = found.Count == 1
-            ? "Нашёлся один дом. Это он?"
-            : $"Нашлось домов: {found.Count}. Выберите свой.";
-
-        if (common.Length > 0)
-        {
-            header += $"\n\n{common}";
+            buttons.Add([MaxButton.Callback(OptionLabel(i + 1, tails[i]), payload)]);
         }
 
         if (found.All(c => !c.KnownHouse))
         {
-            header += "\n\nАдрес распознан по государственному адресному реестру. "
-                + "Сведений об управляющей организации этого дома у нас пока нет.";
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.Append("Адрес распознан по государственному адресному реестру. "
+                + "Сведений об управляющей организации у нас пока нет.");
         }
 
-        await SendAsync(user.MaxChatId, header, buttons, ct);
+        await SendAsync(user.MaxChatId, sb.ToString(), buttons, ct);
     }
 
     /// <summary>
-    /// Выносит общее начало адресов в заголовок.
+    /// Подпись кнопки: номер и та часть адреса, которая поместилась.
     ///
-    /// Пять корпусов одного дома различаются только хвостом, а MAX обрезает подпись кнопки
-    /// с начала — все пять выглядели одинаково, и выбрать свой было нельзя. Когда адреса
-    /// из разных городов, общего начала нет и подписи остаются полными.
+    /// Номер стоит первым, потому что MAX обрезает подпись с конца. Даже когда адрес
+    /// не влез целиком, по номеру строка из списка выше находится однозначно —
+    /// а раньше пять корпусов одного дома давали пять одинаковых кнопок.
+    /// </summary>
+    private static string OptionLabel(int number, string address)
+    {
+        var prefix = $"{number} · ";
+        var room = BotUi.MaxButtonLabel - prefix.Length;
+        var parts = address.Split(", ");
+
+        // Отбрасываем сегменты слева: дом и корпус различают варианты чаще, чем регион.
+        for (var skip = 0; skip < parts.Length; skip++)
+        {
+            var tail = string.Join(", ", parts.Skip(skip));
+            if (tail.Length <= room)
+            {
+                return prefix + tail;
+            }
+        }
+
+        var last = parts[^1];
+        return prefix + (last.Length <= room ? last : last[..Math.Max(1, room - 1)] + "…");
+    }
+
+    /// <summary>
+    /// Убирает общее начало адресов. Когда найдены корпуса одного дома, на кнопке
+    /// остаётся «д. 12 к 1»; когда дома в разных городах, общего начала нет
+    /// и адрес сокращается уже по длине.
     /// </summary>
     private static (string Common, List<string> Tails) SplitCommonPrefix(List<string> addresses)
     {
@@ -295,10 +323,6 @@ public sealed class BindingScenario(
         return (string.Join(", ", parts[0].Take(common)),
                 [.. parts.Select(p => string.Join(", ", p.Skip(common)))]);
     }
-
-    /// <summary>Подписи кнопок ограничены по длине, а адреса из реестра бывают длинными.</summary>
-    private static string Shorten(string text) =>
-        text.Length <= BotUi.MaxButtonLabel ? text : text[..(BotUi.MaxButtonLabel - 1)] + "…";
 
     private async Task BindSuggestedAsync(AppUser user, int index, CancellationToken ct)
     {
