@@ -236,21 +236,28 @@ public sealed class BindingScenario(
             await SetStepAsync(user, Steps.AwaitingAddress, ct, JsonSerializer.Serialize(suggested));
         }
 
+        var (common, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
+
         var buttons = new List<List<object>>();
         var suggestedIndex = 0;
 
-        foreach (var candidate in found)
+        for (var i = 0; i < found.Count; i++)
         {
-            var payload = candidate.KnownHouse
-                ? $"{Callbacks.BindPick}{candidate.BuildingId}"
+            var payload = found[i].KnownHouse
+                ? $"{Callbacks.BindPick}{found[i].BuildingId}"
                 : $"{Callbacks.BindSuggested}{suggestedIndex++}";
 
-            buttons.Add([MaxButton.Callback(Shorten(candidate.Display), payload)]);
+            buttons.Add([MaxButton.Callback(Shorten(tails[i]), payload)]);
         }
 
         var header = found.Count == 1
             ? "Нашёлся один дом. Это он?"
             : $"Нашлось домов: {found.Count}. Выберите свой.";
+
+        if (common.Length > 0)
+        {
+            header += $"\n\n{common}";
+        }
 
         if (found.All(c => !c.KnownHouse))
         {
@@ -261,9 +268,37 @@ public sealed class BindingScenario(
         await SendAsync(user.MaxChatId, header, buttons, ct);
     }
 
+    /// <summary>
+    /// Выносит общее начало адресов в заголовок.
+    ///
+    /// Пять корпусов одного дома различаются только хвостом, а MAX обрезает подпись кнопки
+    /// с начала — все пять выглядели одинаково, и выбрать свой было нельзя. Когда адреса
+    /// из разных городов, общего начала нет и подписи остаются полными.
+    /// </summary>
+    private static (string Common, List<string> Tails) SplitCommonPrefix(List<string> addresses)
+    {
+        var parts = addresses.Select(a => a.Split(", ")).ToList();
+        var common = 0;
+
+        if (parts.Count > 1)
+        {
+            // Последний сегмент не забираем: без него у кнопки не осталось бы подписи.
+            var limit = parts.Min(p => p.Length) - 1;
+
+            while (common < limit
+                   && parts.All(p => string.Equals(p[common], parts[0][common], StringComparison.OrdinalIgnoreCase)))
+            {
+                common++;
+            }
+        }
+
+        return (string.Join(", ", parts[0].Take(common)),
+                [.. parts.Select(p => string.Join(", ", p.Skip(common)))]);
+    }
+
     /// <summary>Подписи кнопок ограничены по длине, а адреса из реестра бывают длинными.</summary>
     private static string Shorten(string text) =>
-        text.Length <= 60 ? text : text[..57] + "…";
+        text.Length <= BotUi.MaxButtonLabel ? text : text[..(BotUi.MaxButtonLabel - 1)] + "…";
 
     private async Task BindSuggestedAsync(AppUser user, int index, CancellationToken ct)
     {

@@ -92,6 +92,15 @@ public sealed class AddressLookupService(
 
             if (existing is not null)
             {
+                // Дом мог быть сохранён до того, как мы научились забирать корпус.
+                // Реестр здесь источник истины, поэтому дописываем молча.
+                if (existing.Address.Block is null or { Length: 0 }
+                    && address.Block is { Length: > 0 })
+                {
+                    existing.Address.Block = address.Block;
+                    await db.SaveChangesAsync(ct);
+                }
+
                 return existing;
             }
         }
@@ -104,6 +113,7 @@ public sealed class AddressLookupService(
                 City = address.City ?? string.Empty,
                 Street = address.Street ?? string.Empty,
                 House = address.House ?? string.Empty,
+                Block = address.Block,
                 FiasId = address.FiasId,
                 SearchText = address.Display.ToLowerInvariant()
             },

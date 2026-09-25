@@ -14,6 +14,9 @@ public static class BotUi
 {
     public const string MenuCallback = "nav:menu";
 
+    /// <summary>Длина подписи кнопки, дальше MAX обрезает сам и без многоточия.</summary>
+    public const int MaxButtonLabel = 34;
+
     private const string MenuLabel = "‹ Главное меню";
 
     /// <summary>Добавляет возврат в меню последней строкой.</summary>

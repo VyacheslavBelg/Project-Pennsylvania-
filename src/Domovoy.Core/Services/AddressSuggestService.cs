@@ -23,7 +23,8 @@ public sealed record SuggestedAddress(
     string? Region,
     string? City,
     string? Street,
-    string? House);
+    string? House,
+    string? Block);
 
 public interface IAddressSuggestService
 {
@@ -97,7 +98,8 @@ public sealed class DaDataAddressSuggestService(
                         s.Data?.RegionWithType,
                         s.Data?.CityWithType ?? s.Data?.SettlementWithType,
                         s.Data?.StreetWithType,
-                        s.Data?.House))
+                        s.Data?.House,
+                        Block(s.Data)))
                     .ToList();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -118,6 +120,15 @@ public sealed class DaDataAddressSuggestService(
         return [];
     }
 
+    /// <summary>
+    /// Корпус приходит отдельными полями. Без него дома 12к1 и 12к2 сохраняются одинаково,
+    /// и в тексте обращения оказывается чужой адрес.
+    /// </summary>
+    private static string? Block(DaDataAddress? data) =>
+        data?.Block is { Length: > 0 } value
+            ? $"{data.BlockType ?? "к"} {value}".Trim()
+            : null;
+
     private sealed record DaDataResponse(
         [property: JsonPropertyName("suggestions")] DaDataSuggestion[]? Suggestions);
 
@@ -131,5 +142,7 @@ public sealed class DaDataAddressSuggestService(
         [property: JsonPropertyName("city_with_type")] string? CityWithType,
         [property: JsonPropertyName("settlement_with_type")] string? SettlementWithType,
         [property: JsonPropertyName("street_with_type")] string? StreetWithType,
-        [property: JsonPropertyName("house")] string? House);
+        [property: JsonPropertyName("house")] string? House,
+        [property: JsonPropertyName("block")] string? Block,
+        [property: JsonPropertyName("block_type")] string? BlockType);
 }

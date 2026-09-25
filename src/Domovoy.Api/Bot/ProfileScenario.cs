@@ -241,7 +241,7 @@ public sealed class ProfileScenario(
 
     /// <summary>Подпись кнопки: MAX обрезает длинные, обрезаем сами и осмысленно.</summary>
     private static string Label(string text) =>
-        text.Length <= 34 ? text : text[..33] + "…";
+        text.Length <= BotUi.MaxButtonLabel ? text : text[..(BotUi.MaxButtonLabel - 1)] + "…";
 
     /// <summary>
     /// Состояние обращения — ради него список и открывают, поэтому отдельной строкой
