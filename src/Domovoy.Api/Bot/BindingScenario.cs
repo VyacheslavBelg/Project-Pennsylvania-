@@ -236,28 +236,62 @@ public sealed class BindingScenario(
             await SetStepAsync(user, Steps.AwaitingAddress, ct, JsonSerializer.Serialize(suggested));
         }
 
-        var (_, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
+        var (common, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
 
         var sb = new StringBuilder();
-        sb.AppendLine(found.Count == 1
-            ? "Нашёлся один дом. Это он?"
-            : $"Нашлось домов: {found.Count}. Выберите свой.");
-
         var buttons = new List<List<object>>();
         var suggestedIndex = 0;
 
-        for (var i = 0; i < found.Count; i++)
+        if (found.Count == 1)
         {
-            // Полный адрес — в тексте: там нет ограничения длины и видно, чем варианты
-            // отличаются. Кнопка несёт номер строки и столько адреса, сколько влезло.
+            // Нумеровать единственный вариант незачем.
+            sb.AppendLine("Нашёлся один дом:");
             sb.AppendLine();
-            sb.Append($"{i + 1} · {found[i].Display}");
+            sb.Append($"🏠 {found[0].Display}");
 
-            var payload = found[i].KnownHouse
-                ? $"{Callbacks.BindPick}{found[i].BuildingId}"
-                : $"{Callbacks.BindSuggested}{suggestedIndex++}";
+            buttons.Add([MaxButton.Callback("Да, это мой дом", PayloadFor(found[0], ref suggestedIndex))]);
+        }
+        else
+        {
+            sb.Append($"Нашлось домов: {found.Count}");
 
-            buttons.Add([MaxButton.Callback(OptionLabel(i + 1, tails[i]), payload)]);
+            // Общая часть адреса выносится наверх: повторять её в каждой строке
+            // значит утопить в ней то, чем дома отличаются.
+            if (common.Length > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine();
+                sb.Append($"🏠 {common}");
+            }
+
+            sb.AppendLine();
+
+            for (var i = 0; i < found.Count; i++)
+            {
+                sb.AppendLine();
+                sb.Append($"{i + 1} — {tails[i]}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.Append("Нажмите номер своего дома.");
+
+            // Подпись кнопки — только номер: адрес в неё не помещается, а обрезанный
+            // выглядит одинаково у соседних корпусов. Номера идут в ряд, чтобы список
+            // кнопок не растягивался на пол-экрана.
+            const int perRow = 5;
+
+            for (var i = 0; i < found.Count; i += perRow)
+            {
+                var row = new List<object>();
+
+                for (var j = i; j < Math.Min(i + perRow, found.Count); j++)
+                {
+                    row.Add(MaxButton.Callback($"{j + 1}", PayloadFor(found[j], ref suggestedIndex)));
+                }
+
+                buttons.Add(row);
+            }
         }
 
         if (found.All(c => !c.KnownHouse))
@@ -272,31 +306,13 @@ public sealed class BindingScenario(
     }
 
     /// <summary>
-    /// Подпись кнопки: номер и та часть адреса, которая поместилась.
-    ///
-    /// Номер стоит первым, потому что MAX обрезает подпись с конца. Даже когда адрес
-    /// не влез целиком, по номеру строка из списка выше находится однозначно —
-    /// а раньше пять корпусов одного дома давали пять одинаковых кнопок.
+    /// Дома из своей базы выбираются по идентификатору, распознанные реестром — по позиции
+    /// в сохранённом списке подсказок, поэтому счётчик считает только вторые.
     /// </summary>
-    private static string OptionLabel(int number, string address)
-    {
-        var prefix = $"{number} · ";
-        var room = BotUi.MaxButtonLabel - prefix.Length;
-        var parts = address.Split(", ");
-
-        // Отбрасываем сегменты слева: дом и корпус различают варианты чаще, чем регион.
-        for (var skip = 0; skip < parts.Length; skip++)
-        {
-            var tail = string.Join(", ", parts.Skip(skip));
-            if (tail.Length <= room)
-            {
-                return prefix + tail;
-            }
-        }
-
-        var last = parts[^1];
-        return prefix + (last.Length <= room ? last : last[..Math.Max(1, room - 1)] + "…");
-    }
+    private static string PayloadFor(BuildingCandidate candidate, ref int suggestedIndex) =>
+        candidate.KnownHouse
+            ? $"{Callbacks.BindPick}{candidate.BuildingId}"
+            : $"{Callbacks.BindSuggested}{suggestedIndex++}";
 
     /// <summary>
     /// Убирает общее начало адресов. Когда найдены корпуса одного дома, на кнопке
