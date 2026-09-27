@@ -154,7 +154,7 @@ public sealed class ProfileScenario(
             foreach (var r in atAddress)
             {
                 sb.AppendLine();
-                sb.AppendLine($"№{r.Number} · {r.ProblemCategory.Title}");
+                sb.AppendLine($"№{r.Number} · {r.Subject ?? r.ProblemCategory.Title}");
                 sb.AppendLine($"Отвечает: {Lower(r.ResponsibilityZone?.Title) ?? "не определено"}"
                               + $", подано {DateText.ShortDate(r.SubmittedAt ?? r.CreatedAt)}");
                 sb.AppendLine(DescribeState(r, now));
@@ -162,7 +162,7 @@ public sealed class ProfileScenario(
                 // Действия живут в карточке: иначе при нескольких обращениях
                 // под списком вырастает частокол кнопок.
                 buttons.Add([MaxButton.Callback(
-                    Label($"№{r.Number} · {r.ProblemCategory.Title}"), $"{Callbacks.Card}{r.Id}")]);
+                    Label($"№{r.Number} · {r.Subject ?? r.ProblemCategory.Title}"), $"{Callbacks.Card}{r.Id}")]);
             }
         }
 
@@ -199,7 +199,7 @@ public sealed class ProfileScenario(
         sb.AppendLine($"Обращение №{r.Number}");
         sb.AppendLine($"🏠 {r.Building.Address}");
         sb.AppendLine();
-        sb.AppendLine(r.ProblemCategory.Title);
+        sb.AppendLine(r.Subject ?? r.ProblemCategory.Title);
         sb.AppendLine($"Отвечает: {Lower(r.ResponsibilityZone?.Title) ?? "не определено"}");
         sb.AppendLine($"Подано {DateText.ShortDate(r.SubmittedAt ?? r.CreatedAt)}");
         sb.AppendLine(DescribeState(r, DateTimeOffset.UtcNow));
@@ -261,11 +261,7 @@ public sealed class ProfileScenario(
         _ => "Черновик"
     };
 
-    /// <summary>Название зоны внутри фразы — со строчной, но аббревиатуру не трогаем.</summary>
-    private static string? Lower(string? title) =>
-        title is { Length: > 1 } && char.IsLower(title[1])
-            ? char.ToLowerInvariant(title[0]) + title[1..]
-            : title;
+    private static string? Lower(string? title) => title is null ? null : TextCase.LowerFirst(title);
 
     private async Task SetStepAsync(AppUser user, string? step, CancellationToken ct)
     {

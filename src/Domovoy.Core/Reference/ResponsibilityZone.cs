@@ -17,6 +17,13 @@ public class ResponsibilityZone
     /// <summary>Что пользователю делать: куда обращаться и в каком порядке.</summary>
     public string? ActionHint { get; set; }
 
+    /// <summary>
+    /// Строка адресата в шапке обращения: «В управляющую организацию». Название зоны
+    /// стоит в именительном падеже, и подставленное как есть давало «В Управляющая
+    /// организация».
+    /// </summary>
+    public string? Addressee { get; set; }
+
     public DataSource Source { get; set; }
     public string? SourceName { get; set; }
     public DateOnly? ActualAt { get; set; }

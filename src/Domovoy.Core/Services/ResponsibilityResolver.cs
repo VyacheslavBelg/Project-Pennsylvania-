@@ -68,11 +68,25 @@ public sealed class ResponsibilityResolver(DomovoyDbContext db)
             return null;
         }
 
-        var deadline = category.Deadlines.Count > 0
-            ? category.Deadlines[0]
-            : await db.NormativeDeadlines.FirstOrDefaultAsync(d => d.ProblemCategoryId == category.Id, ct);
+        var deadlines = category.Deadlines.Count > 0
+            ? category.Deadlines
+            : await db.NormativeDeadlines.Where(d => d.ProblemCategoryId == category.Id).ToListAsync(ct);
 
-        return new Resolution(category, option, zone, deadline, building);
+        return new Resolution(category, option, zone, PickDeadline(deadlines, option?.Id), building);
+    }
+
+    /// <summary>
+    /// Срок темы, если он задан, иначе срок категории.
+    ///
+    /// Единственная точка выбора норматива: и разбор, и отсчёт после отправки должны
+    /// опираться на один и тот же срок, иначе на экране одна норма, а в дате — другая.
+    /// </summary>
+    public static NormativeDeadline? PickDeadline(IEnumerable<NormativeDeadline> deadlines, int? optionId)
+    {
+        var list = deadlines as IList<NormativeDeadline> ?? deadlines.ToList();
+
+        return (optionId is { } id ? list.FirstOrDefault(d => d.ClarifyingOptionId == id) : null)
+               ?? list.FirstOrDefault(d => d.ClarifyingOptionId is null);
     }
 
     /// <summary>

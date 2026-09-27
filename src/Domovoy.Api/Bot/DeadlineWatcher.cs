@@ -107,7 +107,7 @@ public sealed class DeadlineWatcher(
         try
         {
             await max.SendMessageAsync(request.AppUser.MaxChatId,
-                $"Напоминание по обращению №{request.Number} «{request.ProblemCategory.Title}»: срок ответа "
+                $"Напоминание по обращению №{request.Number} «{request.Subject ?? request.ProblemCategory.Title}»: срок ответа "
                 + $"истекает {DateText.DateTime(deadline)}.\n\n"
                 + "Если ответ уже получен — отметьте это, чтобы я не беспокоил.",
                 [
@@ -127,7 +127,7 @@ public sealed class DeadlineWatcher(
         try
         {
             await max.SendMessageAsync(request.AppUser.MaxChatId,
-                $"Срок по обращению №{request.Number} «{request.ProblemCategory.Title}» истёк "
+                $"Срок по обращению №{request.Number} «{request.Subject ?? request.ProblemCategory.Title}» истёк "
                 + $"{DateText.DateTime(request.DeadlineAt!.Value)}, ответа нет.\n\n"
                 + $"Норматив: {request.DeadlineDescription}, основание: {request.DeadlineLegalBasis}.\n\n"
                 + "Это основание для жалобы в жилищную инспекцию. Могу собрать готовый текст "

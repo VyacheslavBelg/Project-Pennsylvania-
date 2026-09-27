@@ -56,6 +56,12 @@ public class Request
     public int? ResponsibilityZoneId { get; set; }
     public ResponsibilityZone? ResponsibilityZone { get; set; }
 
+    /// <summary>
+    /// Суть проблемы на момент подачи: тема, а если её нет — категория. Хранится,
+    /// а не вычисляется: справочник меняется, а поданное обращение — нет.
+    /// </summary>
+    public string? Subject { get; set; }
+
     /// <summary>Что написал пользователь своими словами.</summary>
     public string? Description { get; set; }
 

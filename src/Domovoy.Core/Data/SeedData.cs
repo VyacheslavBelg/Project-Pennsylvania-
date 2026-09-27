@@ -17,6 +17,13 @@ public static class SeedData
 {
     private static readonly DateOnly Today = new(2026, 9, 20);
 
+    /// <summary>
+    /// Дата сверки справочника проблем с источниками — по каталогу
+    /// docs/product/08-problem-catalog.md. Демонстрационные дома готовились раньше
+    /// и сохраняют свою дату.
+    /// </summary>
+    public static readonly DateOnly CatalogDate = new(2026, 9, 26);
+
     public static async Task ApplyAsync(DomovoyDbContext db, CancellationToken ct = default)
     {
         await SeedZonesAsync(db, ct);
@@ -30,22 +37,28 @@ public static class SeedData
         if (await db.ResponsibilityZones.AnyAsync(ct)) return;
 
         db.ResponsibilityZones.AddRange(
-            Zone("uk", "Управляющая организация",
+            Zone("uk", "Управляющая организация", "В управляющую организацию",
                 "Обращение направляется в управляющую организацию вашего дома.",
                 "ПП РФ от 15.05.2013 № 416"),
-            Zone("rso", "Ресурсоснабжающая организация",
+            Zone("rso", "Ресурсоснабжающая организация", "В ресурсоснабжающую организацию",
                 "За качество ресурса до границы дома отвечает поставщик, а не управляющая организация.",
                 "ПП РФ от 06.05.2011 № 354"),
-            Zone("contractor", "Подрядчик",
+            Zone("contractor", "Подрядчик", "В управляющую организацию",
                 "Работы выполняет привлечённый подрядчик; обращение подаётся через управляющую организацию как заказчика.",
                 "ПП РФ от 15.05.2013 № 416"),
-            Zone("municipality", "Муниципальная служба",
-                "Вопрос за границей общего имущества дома — обращение в городскую службу.",
+            Zone("municipality", "Орган местного самоуправления", "В администрацию муниципального образования",
+                "Вопрос за границей общего имущества дома — обращение в администрацию города или района. "
+                + "Подать его можно и через портал «Госуслуги. Решаем вместе».",
                 "ЖК РФ"),
-            Zone("ads", "Аварийно-диспетчерская служба",
+            Zone("regional_operator", "Региональный оператор по ТКО", "Региональному оператору по обращению с ТКО",
+                "Вывоз отходов организует региональный оператор. Обращение можно направить ему напрямую "
+                + "или через управляющую организацию; название и контакты оператора обычно указаны "
+                + "в квитанции за обращение с ТКО.",
+                "ПП РФ от 12.11.2016 № 1156"),
+            Zone("ads", "Аварийно-диспетчерская служба", "В аварийно-диспетчерскую службу",
                 "Аварийная ситуация: звоните в АДС, норматив ответа оператора — 5 минут.",
                 "ПП РФ от 27.03.2018 № 331"),
-            Zone("resident", "Собственник помещения",
+            Zone("resident", "Собственник помещения", null,
                 "Это внутриквартирная зона: управляющая организация за неё не отвечает. "
                 + "При заливе от соседей она составляет акт, но ущерб возмещает виновник.",
                 "ЖК РФ, ст. 30"));
@@ -59,19 +72,19 @@ public static class SeedData
 
         var zones = await db.ResponsibilityZones.ToDictionaryAsync(z => z.Code, ct);
 
+        // Первый экран — по каталогу docs/product/08-problem-catalog.md: семь кнопок,
+        // авария первой. Подробность — в темах, у которых свои адресаты и сроки.
         var categories = new[]
         {
-            Category("leak_emergency", "Протечка или залив", 10, false,
-                "Откуда течёт?"),
-            Category("heating", "Отопление, холодно", 20, false,
-                "Где именно холодно?"),
-            Category("hot_water", "Горячая вода", 30, false,
-                "Что с горячей водой?"),
-            Category("common_area", "Подъезд, лифт, двор", 40, false,
-                "Где именно возникла проблема?"),
-            Category("waste", "Мусор и площадка", 50, false, "Что именно с мусором?"),
-            Category("billing", "Начисления и тарифы", 60, false, "По какой части начислений вопрос?"),
-            Category("other", "Другой вопрос по дому", 90, false, null)
+            Category("emergency", "Авария или опасность", 10, true, null),
+            Category("utilities", "Вода, отопление, электричество", 20, false,
+                "Что именно случилось?"),
+            Category("common_property", "Подъезд и общее имущество", 30, false,
+                "Что именно и где?"),
+            Category("yard_waste", "Двор и мусор", 40, false, "Что именно?"),
+            Category("billing", "Начисления и счётчики", 50, false, "О чём вопрос?"),
+            Category("followup", "Заявка или ответ УК", 60, false, "Что с прежней заявкой?"),
+            Category("other", "Другое", 90, false, null)
         };
 
         db.ProblemCategories.AddRange(categories);
@@ -79,31 +92,29 @@ public static class SeedData
 
         var byCode = categories.ToDictionary(c => c.Code);
 
-        AddResponsibility(db, byCode["leak_emergency"], zones["ads"]);
-        AddResponsibility(db, byCode["heating"], zones["uk"], ManagementKind.ManagementCompany);
-        AddResponsibility(db, byCode["heating"], zones["rso"]);
-        AddResponsibility(db, byCode["hot_water"], zones["uk"], ManagementKind.ManagementCompany);
-        AddResponsibility(db, byCode["hot_water"], zones["rso"]);
-        AddResponsibility(db, byCode["common_area"], zones["uk"]);
-        AddResponsibility(db, byCode["waste"], zones["municipality"]);
+        // Правило по умолчанию нужно категориям без тем. У остальных адресата
+        // определяет тема, а строка ниже — страховка на случай пустого выбора.
+        AddResponsibility(db, byCode["emergency"], zones["ads"]);
+        AddResponsibility(db, byCode["utilities"], zones["uk"]);
+        AddResponsibility(db, byCode["common_property"], zones["uk"]);
+        AddResponsibility(db, byCode["yard_waste"], zones["uk"]);
         AddResponsibility(db, byCode["billing"], zones["uk"]);
+        AddResponsibility(db, byCode["followup"], zones["uk"]);
         AddResponsibility(db, byCode["other"], zones["uk"]);
 
-        // Сроки различаются на порядки и заданы разными актами — поэтому они в справочнике.
-        AddDeadline(db, byCode["leak_emergency"], 10, DeadlineUnit.BusinessDays,
-            "ПП РФ от 15.05.2013 № 416",
-            "Содержание общего имущества. Для аварии действует отдельный норматив — "
-            + "ответ оператора АДС в течение 5 минут, ПП РФ № 331.");
-        AddDeadline(db, byCode["heating"], 3, DeadlineUnit.BusinessDays,
-            "ПП РФ от 06.05.2011 № 354", "Обращение по качеству коммунальной услуги.");
-        AddDeadline(db, byCode["hot_water"], 3, DeadlineUnit.BusinessDays,
-            "ПП РФ от 06.05.2011 № 354", "Обращение по качеству коммунальной услуги.");
-        AddDeadline(db, byCode["common_area"], 10, DeadlineUnit.BusinessDays,
-            "ПП РФ от 15.05.2013 № 416", "Прочие обращения к управляющей организации.");
-        AddDeadline(db, byCode["waste"], 30, DeadlineUnit.CalendarDays,
-            "ПП РФ от 15.05.2013 № 416", "Общий порядок рассмотрения обращения.");
+        // Срок категории действует для тем, у которых нет своего. У аварии срока ответа
+        // на письменное обращение нет: обращение не формируется, норматив оператора АДС
+        // показывается на экране аварии.
+        AddDeadline(db, byCode["utilities"], 3, DeadlineUnit.BusinessDays,
+            "ПП РФ от 06.05.2011 № 354", "Ответ на жалобу о качестве коммунальной услуги.");
+        AddDeadline(db, byCode["common_property"], 10, DeadlineUnit.BusinessDays,
+            "ПП РФ от 15.05.2013 № 416", "Обращение к управляющей организации.");
+        AddDeadline(db, byCode["yard_waste"], 10, DeadlineUnit.BusinessDays,
+            "ПП РФ от 15.05.2013 № 416", "Обращение к управляющей организации.");
         AddDeadline(db, byCode["billing"], 10, DeadlineUnit.BusinessDays,
-            "ПП РФ от 15.05.2013 № 416", "Прочие обращения к управляющей организации.");
+            "ПП РФ от 15.05.2013 № 416", "Обращение к управляющей организации.");
+        AddDeadline(db, byCode["followup"], 10, DeadlineUnit.BusinessDays,
+            "ПП РФ от 15.05.2013 № 416", "Повторное обращение к управляющей организации.");
         AddDeadline(db, byCode["other"], 30, DeadlineUnit.CalendarDays,
             "ПП РФ от 15.05.2013 № 416", "Общий порядок рассмотрения обращения.");
 
@@ -136,14 +147,16 @@ public static class SeedData
         await db.SaveChangesAsync(ct);
     }
 
-    private static ResponsibilityZone Zone(string code, string title, string hint, string source) => new()
+    private static ResponsibilityZone Zone(
+        string code, string title, string? addressee, string hint, string source) => new()
     {
         Code = code,
         Title = title,
+        Addressee = addressee,
         ActionHint = hint,
         Source = DataSource.Official,
         SourceName = source,
-        ActualAt = Today,
+        ActualAt = CatalogDate,
         Territory = "РФ"
     };
 
@@ -166,7 +179,7 @@ public static class SeedData
             ClarifyingQuestion = question,
             Source = DataSource.Official,
             SourceName = "Составлено по ЖК РФ и правилам предоставления коммунальных услуг",
-            ActualAt = Today,
+            ActualAt = CatalogDate,
             Territory = "РФ"
         };
     }
@@ -181,7 +194,7 @@ public static class SeedData
             AppliesToManagement = appliesTo,
             Source = DataSource.Official,
             SourceName = "ПП РФ № 354, ПП РФ № 416",
-            ActualAt = Today
+            ActualAt = CatalogDate
         });
 
     private static void AddDeadline(
@@ -196,7 +209,7 @@ public static class SeedData
             Comment = comment,
             Source = DataSource.Official,
             SourceName = legalBasis,
-            ActualAt = Today,
+            ActualAt = CatalogDate,
             Territory = "РФ"
         });
 

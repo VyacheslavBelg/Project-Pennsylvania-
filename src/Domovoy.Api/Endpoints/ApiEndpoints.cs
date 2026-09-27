@@ -62,9 +62,10 @@ public static class ApiEndpoints
                 c.Code,
                 c.Title,
                 c.IsEmergency,
-                deadline = c.Deadlines
-                    .Select(d => new { text = d.Describe(), d.LegalBasis })
-                    .FirstOrDefault(),
+                // Срок категории, а не первой попавшейся темы: у тем бывают свои нормы.
+                deadline = ResponsibilityResolver.PickDeadline(c.Deadlines, null) is { } d
+                    ? new { text = d.Describe(), d.LegalBasis }
+                    : null,
                 source = new { name = c.SourceName, actualAt = c.ActualAt }
             }));
         });

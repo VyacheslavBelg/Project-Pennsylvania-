@@ -138,6 +138,8 @@ public class DomovoyDbContext(DbContextOptions<DomovoyDbContext> options) : DbCo
         {
             e.HasOne(x => x.ProblemCategory).WithMany(c => c.Deadlines)
                 .HasForeignKey(x => x.ProblemCategoryId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.ClarifyingOption).WithMany()
+                .HasForeignKey(x => x.ClarifyingOptionId).OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.LegalBasis).HasMaxLength(300);
         });
     }

@@ -42,6 +42,9 @@ public sealed class ProblemScenario(
         public const string BackToCategories = "problem:back:cats";
     }
 
+    /// <summary>Категория повторных обращений: у неё есть вход в уже поданные через бота.</summary>
+    private const string FollowUpCategory = "followup";
+
     /// <summary>Состояние сценария между шагами. Лежит в базе, поэтому переживает перезапуск.</summary>
     private sealed record Draft(int CategoryId, int? OptionId, int? RequestId);
 
@@ -89,6 +92,13 @@ public sealed class ProblemScenario(
         var buttons = category.ClarifyingOptions
             .Select(o => new List<object> { MaxButton.Callback(o.Text, $"{Callbacks.Option}{o.Id}") })
             .ToList();
+
+        // Обращения, поданные через бота, уже лежат в «Моих обращениях» — со сроком
+        // и готовой жалобой в инспекцию. Описывать их заново незачем.
+        if (category.Code == FollowUpCategory)
+        {
+            buttons.Insert(0, [MaxButton.Callback("Мои обращения в Домовом", ProfileScenario.Callbacks.MyRequests)]);
+        }
 
         buttons.Add([MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]);
 
@@ -170,6 +180,7 @@ public sealed class ProblemScenario(
             ProblemCategoryId = category.Id,
             ClarifyingOptionId = option?.Id,
             ResponsibilityZoneId = resolution.Zone.Id,
+            Subject = option?.Text ?? category.Title,
             Status = RequestStatus.Draft,
             CreatedAt = DateTimeOffset.UtcNow,
             DeadlineDescription = resolution.Deadline?.Describe(),
@@ -193,33 +204,31 @@ public sealed class ProblemScenario(
     private async Task ShowEmergencyAsync(AppUser user, Resolution r, CancellationToken ct)
     {
         var sb = new StringBuilder();
+        // Строки не переносятся вручную: на телефоне MAX переносит сам, а ручной
+        // перенос посреди фразы превращает текст в лесенку.
         sb.AppendLine("⚠️ Это аварийная ситуация.");
         sb.AppendLine();
-        sb.AppendLine("Звоните в аварийно-диспетчерскую службу — оператор обязан ответить");
-        sb.AppendLine("в течение 5 минут (ПП РФ от 27.03.2018 № 331).");
+        sb.AppendLine("Звоните в аварийно-диспетчерскую службу дома — оператор обязан ответить "
+                      + "в течение 5 минут (ПП РФ от 27.03.2018 № 331).");
+        sb.AppendLine();
 
         var phone = r.Building.ManagingOrganization?.EmergencyPhone;
-        if (!string.IsNullOrWhiteSpace(phone))
-        {
-            sb.AppendLine();
-            sb.AppendLine($"Аварийная служба вашего дома: {phone}");
-        }
-        else
-        {
-            sb.AppendLine();
-            sb.AppendLine("Телефон аварийной службы указан на квитанции и на доске объявлений");
-            sb.AppendLine("в подъезде. Единый номер экстренных служб — 112.");
-        }
+        sb.AppendLine(!string.IsNullOrWhiteSpace(phone)
+            ? $"Аварийная служба вашего дома: {phone}"
+            : "Телефон аварийной службы указан в квитанции и на доске объявлений в подъезде.");
 
         sb.AppendLine();
-        sb.AppendLine("Зафиксируйте номер заявки и время звонка: они понадобятся, если");
-        sb.AppendLine("проблему не устранят.");
+        sb.AppendLine("При угрозе жизни — 112.");
+        sb.AppendLine("При запахе газа — 104 или 112: не включайте свет и электроприборы, "
+                      + "звоните, выйдя из помещения.");
+        sb.AppendLine();
+        sb.AppendLine("Запишите номер заявки и время звонка: они понадобятся, если проблему не устранят.");
 
         await SetStepAsync(user, null, null, ct);
         await LogAsync("emergency_routed", user, r.Building.Id, r.Category.Code, ct);
 
         await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(),
-            [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
+            [[MaxButton.Callback("Оформить обращение после звонка", Callbacks.Start)]], ct);
     }
 
     public async Task HandleDescriptionAsync(AppUser user, string? description, CancellationToken ct)
@@ -282,7 +291,8 @@ public sealed class ProblemScenario(
             .Where(r => r.AppUserId == user.Id)
             .MaxAsync(r => (int?)r.Number, ct) ?? 0) + 1;
 
-        var deadline = request.ProblemCategory.Deadlines.FirstOrDefault();
+        var deadline = ResponsibilityResolver.PickDeadline(
+            request.ProblemCategory.Deadlines, request.ClarifyingOptionId);
         request.DeadlineAt = deadline is not null
             ? DeadlineCalculator.Compute(now, deadline)
             : now.AddDays(30);
@@ -351,7 +361,7 @@ public sealed class ProblemScenario(
         var sb = new StringBuilder();
         var address = request.Building.Address.ToString();
 
-        sb.AppendLine($"В {request.ResponsibilityZone?.Title ?? "управляющую организацию"}");
+        sb.AppendLine(request.ResponsibilityZone?.Addressee ?? "В управляющую организацию");
         if (request.Building.ManagingOrganization is { } org)
         {
             sb.AppendLine(org.Name);
@@ -366,13 +376,10 @@ public sealed class ProblemScenario(
         sb.AppendLine();
         sb.AppendLine("ОБРАЩЕНИЕ");
         sb.AppendLine();
-        sb.Append($"Сообщаю о проблеме по адресу {address}: {request.ProblemCategory.Title.ToLowerInvariant()}");
-
-        if (request.ClarifyingOption is { } option)
-        {
-            sb.Append($" — {option.Text.ToLowerInvariant()}");
-        }
-        sb.AppendLine(".");
+        // Суть — тема, а не категория: «Вода, отопление, электричество» в документе
+        // ничего не сообщает, «холодно у меня и у соседей» — сообщает.
+        sb.AppendLine($"Сообщаю о проблеме по адресу {address}: "
+                      + $"{TextCase.LowerFirst(request.Subject ?? request.ProblemCategory.Title)}.");
 
         if (!string.IsNullOrWhiteSpace(request.Description))
         {
@@ -411,7 +418,7 @@ public sealed class ProblemScenario(
         sb.AppendLine();
         sb.AppendLine("ЖАЛОБА");
         sb.AppendLine();
-        sb.AppendLine($"Обращение по вопросу «{request.ProblemCategory.Title}» направлено "
+        sb.AppendLine($"Обращение по вопросу «{request.Subject ?? request.ProblemCategory.Title}» направлено "
                       + $"{DateText.Date(request.SubmittedAt!.Value)}.");
         sb.AppendLine($"Нормативный срок ответа — {request.DeadlineDescription} "
                       + $"({request.DeadlineLegalBasis}).");

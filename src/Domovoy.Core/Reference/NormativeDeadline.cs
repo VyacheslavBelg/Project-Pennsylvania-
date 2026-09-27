@@ -13,6 +13,16 @@ public class NormativeDeadline
     public int ProblemCategoryId { get; set; }
     public ProblemCategory ProblemCategory { get; set; } = null!;
 
+    /// <summary>
+    /// Тема, к которой относится срок. Пусто — срок категории по умолчанию.
+    ///
+    /// Внутри одной категории темы бывают разной природы: жалоба на качество коммунальной
+    /// услуги, обращение по содержанию общего имущества и обращение в орган местного
+    /// самоуправления регулируются разными актами и имеют разные сроки ответа.
+    /// </summary>
+    public int? ClarifyingOptionId { get; set; }
+    public ClarifyingOption? ClarifyingOption { get; set; }
+
     public int Amount { get; set; }
     public DeadlineUnit Unit { get; set; }
 
