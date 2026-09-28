@@ -52,7 +52,7 @@ public sealed class ProfileScenario(
         sb.AppendLine("Ваши данные для обращений");
         sb.AppendLine();
         sb.AppendLine($"ФИО: {user.FullName ?? "не указано"}");
-        sb.AppendLine($"Дом: {link?.Building.Address.ToString() ?? "не привязан"}");
+        sb.AppendLine($"Дом: {link?.Building.Address.ToFullString() ?? "не привязан"}");
         sb.AppendLine($"Квартира: {link?.Apartment ?? "не указана"}");
 
         if (user.FullName is null or { Length: 0 })
@@ -150,7 +150,7 @@ public sealed class ProfileScenario(
 
         var buttons = new List<List<object>>();
 
-        foreach (var atAddress in requests.GroupBy(r => r.Building.Address.ToString()))
+        foreach (var atAddress in requests.GroupBy(r => r.Building.Address.ToFullString()))
         {
             sb.AppendLine();
             sb.AppendLine();
@@ -202,7 +202,7 @@ public sealed class ProfileScenario(
 
         var sb = new StringBuilder();
         sb.AppendLine($"Обращение №{r.Number}");
-        sb.AppendLine($"🏠 {r.Building.Address}");
+        sb.AppendLine($"🏠 {r.Building.Address.ToFullString()}");
         sb.AppendLine();
         sb.AppendLine(r.Subject ?? r.ProblemCategory.Title);
         sb.AppendLine($"Отвечает: {Lower(r.ResponsibilityZone?.Title) ?? "не определено"}");

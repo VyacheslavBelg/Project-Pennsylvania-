@@ -26,4 +26,15 @@ public class Address
     public override string ToString() => Block is { Length: > 0 } block
         ? $"{City}, {Street}, д. {House}, {block}"
         : $"{City}, {Street}, д. {House}";
+
+    /// <summary>
+    /// Адрес с регионом — для карточки дома и текста обращения. Без региона «рп Новоспасское»
+    /// или «пгт Октябрьский» неоднозначны: одноимённых посёлков в стране десятки, а адрес
+    /// уходит в документ. У городов федерального значения реестр отдаёт регион и город
+    /// одинаковыми, и тогда регион не повторяется.
+    /// </summary>
+    public string ToFullString() =>
+        Region is { Length: > 0 } region && !string.Equals(region, City, StringComparison.OrdinalIgnoreCase)
+            ? $"{region}, {this}"
+            : ToString();
 }

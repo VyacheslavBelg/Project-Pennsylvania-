@@ -48,7 +48,7 @@ public sealed class AddressLookupService(
         {
             return curated
                 .Select(b => new BuildingCandidate(
-                    FullDisplay(b.Address), b.Id, null, b.ManagingOrganization?.Name))
+                    b.Address.ToFullString(), b.Id, null, b.ManagingOrganization?.Name))
                 .ToList();
         }
 
@@ -81,20 +81,11 @@ public sealed class AddressLookupService(
                 continue;
             }
 
-            result.Add(new BuildingCandidate(FullDisplay(b.Address), b.Id, null, null));
+            result.Add(new BuildingCandidate(b.Address.ToFullString(), b.Id, null, null));
         }
 
         return result.Take(MaxResults).ToList();
     }
-
-    /// <summary>
-    /// Адрес в том же виде, в каком его отдаёт реестр: с региона. Иначе в одном списке
-    /// оказываются записи двух форматов, и сравнить их глазами нельзя.
-    /// </summary>
-    private static string FullDisplay(Address address) =>
-        address.Region is { Length: > 0 } region
-            ? $"{region}, {address}"
-            : address.ToString();
 
     /// <summary>
     /// Сохраняет дом, распознанный по адресному реестру. Управляющая организация остаётся

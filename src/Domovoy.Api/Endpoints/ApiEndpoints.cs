@@ -80,7 +80,7 @@ public static class ApiEndpoints
             b.Address.City,
             b.Address.Street,
             b.Address.House,
-            full = b.Address.ToString()
+            full = b.Address.ToFullString()
         },
         management = new
         {

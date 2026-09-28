@@ -403,7 +403,7 @@ public sealed class BindingScenario(
     private static string DescribeBuilding(Building b)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"🏠 {b.Address}");
+        sb.AppendLine($"🏠 {b.Address.ToFullString()}");
 
         if (b.ManagingOrganization is { } org)
         {

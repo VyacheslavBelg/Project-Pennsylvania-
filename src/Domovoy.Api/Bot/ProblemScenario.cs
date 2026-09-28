@@ -383,7 +383,7 @@ public sealed class ProblemScenario(
     private static string BuildRequestText(Request request, AppUser user, string? apartment)
     {
         var sb = new StringBuilder();
-        var address = request.Building.Address.ToString();
+        var address = request.Building.Address.ToFullString();
 
         sb.AppendLine(request.ResponsibilityZone?.Addressee ?? "В управляющую организацию");
         if (request.Building.ManagingOrganization is { } org)
@@ -438,7 +438,7 @@ public sealed class ProblemScenario(
         sb.AppendLine("———");
         sb.AppendLine("В Государственную жилищную инспекцию");
         sb.AppendLine($"От: {Who(user)}");
-        sb.AppendLine($"Адрес: {request.Building.Address}{ApartmentSuffix(apartment)}");
+        sb.AppendLine($"Адрес: {request.Building.Address.ToFullString()}{ApartmentSuffix(apartment)}");
         sb.AppendLine();
         sb.AppendLine("ЖАЛОБА");
         sb.AppendLine();
