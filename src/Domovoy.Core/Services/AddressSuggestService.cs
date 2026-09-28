@@ -30,7 +30,8 @@ public interface IAddressSuggestService
 {
     bool IsConfigured { get; }
 
-    Task<IReadOnlyList<SuggestedAddress>> SuggestAsync(string query, CancellationToken ct = default);
+    /// <param name="count">Сколько вариантов запросить. DaData отдаёт не больше 20.</param>
+    Task<IReadOnlyList<SuggestedAddress>> SuggestAsync(string query, int count, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -56,7 +57,7 @@ public sealed class DaDataAddressSuggestService(
     public bool IsConfigured => _options.IsConfigured;
 
     public async Task<IReadOnlyList<SuggestedAddress>> SuggestAsync(
-        string query, CancellationToken ct = default)
+        string query, int count, CancellationToken ct = default)
     {
         if (!IsConfigured || string.IsNullOrWhiteSpace(query))
         {
@@ -68,7 +69,7 @@ public sealed class DaDataAddressSuggestService(
         var request = new
         {
             query,
-            count = 5,
+            count = Math.Clamp(count, 1, 20),
             from_bound = new { value = "house" },
             to_bound = new { value = "house" }
         };

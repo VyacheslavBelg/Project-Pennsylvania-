@@ -13,7 +13,7 @@ namespace Domovoy.Core.Services;
 /// </summary>
 public sealed class BuildingSearchService(DomovoyDbContext db)
 {
-    public const int MaxResults = 6;
+    public const int MaxResults = AddressLookupService.MaxResults;
 
     public async Task<IReadOnlyList<Building>> SearchAsync(string query, CancellationToken ct = default)
     {

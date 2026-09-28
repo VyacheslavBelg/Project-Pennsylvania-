@@ -30,7 +30,11 @@ public sealed class AddressLookupService(
     BuildingSearchService localSearch,
     IAddressSuggestService suggest)
 {
-    public const int MaxResults = 6;
+    /// <summary>
+    /// Сколько домов предлагать. Столько же отдаёт DaData по умолчанию; больше — уже стена
+    /// текста на экране телефона, и тогда полезнее попросить уточнить адрес.
+    /// </summary>
+    public const int MaxResults = 10;
 
     public async Task<IReadOnlyList<BuildingCandidate>> FindAsync(
         string query, CancellationToken ct = default)
@@ -48,21 +52,15 @@ public sealed class AddressLookupService(
                 .ToList();
         }
 
-        // Остальные локальные дома — всего лишь след предыдущих выборов из реестра.
-        // Они не должны заслонять свежие подсказки: иначе после выбора одного дома
-        // поиск по тому же тексту навсегда сузится до него.
-        var cached = local
-            .Select(b => new BuildingCandidate(FullDisplay(b.Address), b.Id, null, null))
-            .ToList();
+        var suggested = await suggest.SuggestAsync(query, MaxResults, ct);
 
-        var suggested = await suggest.SuggestAsync(query, ct);
-
-        var seenFias = local
-            .Where(b => b.Address.FiasId is { Length: > 0 })
-            .Select(b => b.Address.FiasId!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var result = new List<BuildingCandidate>(cached);
+        // Подсказки реестра — первыми и в его порядке: он ранжирует по релевантности,
+        // и его сведения полнее сохранённых у нас. Раньше первыми шли дома из прошлых
+        // выборов, в том числе записанные без корпуса, и в списке оказывались две
+        // одинаковые строки. Дом, который у нас уже есть, выбирается из подсказки
+        // и при выборе дополняется из неё.
+        var result = new List<BuildingCandidate>();
+        var seenFias = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var s in suggested)
         {
@@ -72,6 +70,18 @@ public sealed class AddressLookupService(
             }
 
             result.Add(new BuildingCandidate(s.Display, null, s, null));
+        }
+
+        // Сохранённые дома, которых нет среди подсказок, — запасной путь: например,
+        // когда реестр недоступен или ключ DaData не задан.
+        foreach (var b in local)
+        {
+            if (b.Address.FiasId is { Length: > 0 } fias && seenFias.Contains(fias))
+            {
+                continue;
+            }
+
+            result.Add(new BuildingCandidate(FullDisplay(b.Address), b.Id, null, null));
         }
 
         return result.Take(MaxResults).ToList();
