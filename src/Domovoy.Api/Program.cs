@@ -22,6 +22,7 @@ builder.Services.AddScoped<ProblemScenario>();
 builder.Services.AddScoped<ProfileScenario>();
 builder.Services.AddScoped<ResponsibilityResolver>();
 builder.Services.AddScoped<BotScreen>();
+builder.Services.AddSingleton<Domovoy.Api.Auth.MaxInitDataValidator>();
 builder.Services.AddScoped<ScenarioRouter>();
 
 // Подсказки по адресам из государственного адресного реестра. Без ключа сервис

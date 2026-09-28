@@ -27,6 +27,13 @@ public sealed class MaxBotOptions
     /// <summary>Готова ли прямая ссылка на мини-приложение.</summary>
     public bool HasMiniApp => !string.IsNullOrWhiteSpace(BotUsername);
 
+    /// <summary>
+    /// Показывать ли в боте кнопку формы выбора дома. Форма работает с GitHub Pages
+    /// и обращается к бэкенду по публичному HTTPS-адресу; пока его нет, кнопка открыла бы
+    /// форму, которая не может ни искать, ни привязывать. Включается вместе с прод-хостингом.
+    /// </summary>
+    public bool BindForm { get; set; }
+
     public string MiniAppLink(string payload = "home") =>
         $"https://max.ru/{BotUsername}?startapp={Uri.EscapeDataString(payload)}";
 }

@@ -13,3 +13,8 @@
   gap: 6px;
   padding: 8px 4px;
 }
+
+.app__hint {
+  padding: 0 4px;
+  opacity: 0.7;
+}

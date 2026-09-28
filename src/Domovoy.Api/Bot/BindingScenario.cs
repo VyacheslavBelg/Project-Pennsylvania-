@@ -40,6 +40,9 @@ public sealed class BindingScenario(
 
     private readonly MaxBotOptions _options = options.Value;
 
+    /// <summary>Параметр запуска мини-приложения, открывающий форму выбора дома.</summary>
+    public const string BindFormStartParam = "bind";
+
     public async Task HandleAsync(MaxUpdate update, CancellationToken ct)
     {
         switch (update.UpdateType)
@@ -139,7 +142,20 @@ public sealed class BindingScenario(
 
         if (payload == Callbacks.BindStart || payload == Callbacks.BindReset)
         {
+            // Форма — основной путь: сообщения пользователя бот удалить не может,
+            // а ввод в форме в переписке не остаётся. Текст — запасной путь, шаг
+            // ожидания адреса открыт в обоих случаях.
             await SetStepAsync(user, Steps.AwaitingAddress, ct);
+
+            if (_options.HasMiniApp && _options.BindForm)
+            {
+                await SendAsync(
+                    "Выберите дом в форме — так в переписке не останется лишних сообщений.\n\n"
+                    + "Или напишите адрес сюда — например, «Баумана 15».",
+                    [[MaxButton.Link("🏠 Выбрать дом", _options.MiniAppLink(BindFormStartParam))]], ct);
+                return;
+            }
+
             await SendAsync(
                 "Введите адрес дома — например, «Баумана 15» или «Ямашева 54».", ct: ct);
             return;
@@ -148,7 +164,7 @@ public sealed class BindingScenario(
         if (payload.StartsWith(Callbacks.BindPick, StringComparison.Ordinal)
             && int.TryParse(payload[Callbacks.BindPick.Length..], out var buildingId))
         {
-            await BindAsync(user, buildingId, ct);
+            await LinkBuildingAsync(user, buildingId, ct);
             return;
         }
 
@@ -351,10 +367,17 @@ public sealed class BindingScenario(
         }
 
         var building = await lookup.EnsureBuildingAsync(stored[index], ct);
-        await BindAsync(user, building.Id, ct);
+        await LinkBuildingAsync(user, building.Id, ct);
     }
 
-    private async Task BindAsync(AppUser user, int buildingId, CancellationToken ct)
+    /// <summary>
+    /// Привязывает пользователя к дому и показывает карточку дома. Вызывается и из чата,
+    /// и из формы мини-приложения: во втором случае карточка сменяет в чате экран ввода адреса.
+    ///
+    /// Имя не BindAsync намеренно: публичный метод с таким именем минимальные API ASP.NET
+    /// принимают за собственный способ привязки параметра и падают на первом же запросе.
+    /// </summary>
+    public async Task<Building?> LinkBuildingAsync(AppUser user, int buildingId, CancellationToken ct)
     {
         var building = await db.Buildings
             .Include(b => b.Address)
@@ -364,7 +387,7 @@ public sealed class BindingScenario(
         if (building is null)
         {
             await SendAsync("Этот дом больше недоступен, попробуйте ещё раз.", ct: ct);
-            return;
+            return null;
         }
 
         var existing = await db.UserBuildingLinks.FirstOrDefaultAsync(l => l.AppUserId == user.Id, ct);
@@ -398,6 +421,8 @@ public sealed class BindingScenario(
 
         await SendAsync(
             "Дом привязан.\n\n" + DescribeBuilding(building), BuildingButtons(building), ct);
+
+        return building;
     }
 
     private static string DescribeBuilding(Building b)

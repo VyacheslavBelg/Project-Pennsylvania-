@@ -21,6 +21,8 @@ export interface MaxWebApp {
   platform?: string | Promise<string>
   version?: string | Promise<string>
   deviceName?: string | Promise<string>
+  /** Закрывает мини-приложение и возвращает в чат. */
+  close?: () => void
 }
 
 declare global {

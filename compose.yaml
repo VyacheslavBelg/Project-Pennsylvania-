@@ -29,6 +29,7 @@ services:
       Max__Token: ${MAX_BOT_TOKEN:?нужно задать MAX_BOT_TOKEN в .env}
       Max__BotUsername: ${MAX_BOT_USERNAME:-}
       Max__WebAppUrl: ${MAX_WEBAPP_URL:-}
+      Max__BindForm: ${MAX_BIND_FORM:-false}
       WebApp__Origins: ${WEBAPP_ORIGINS:-http://localhost:8081}
       DaData__ApiKey: ${DADATA_API_KEY:-}
     ports:

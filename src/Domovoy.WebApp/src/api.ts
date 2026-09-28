@@ -5,41 +5,67 @@ const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export const apiConfigured = baseUrl.length > 0
 
-export interface BuildingSource {
-  kind: string
-  name?: string | null
-  actualAt?: string | null
-  isTestData: boolean
-}
-
-export interface Building {
-  id: number
-  address: { region: string; city: string; street: string; house: string; full: string }
-  management: { kind: string; name?: string | null; phone?: string | null; emergencyPhone?: string | null }
-  buildYear?: number | null
-  floors?: number | null
-  entrances?: number | null
-  source: BuildingSource
+/** Вариант дома из поиска: свой дом по идентификатору либо адрес из реестра. */
+export interface AddressCandidate {
+  buildingId: number | null
+  display: string
+  knownHouse: boolean
+  managingOrganization: string | null
+  fiasId: string | null
+  source: string
 }
 
 export class ApiError extends Error {}
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  if (!apiConfigured) {
-    throw new ApiError('Адрес сервиса не настроен')
+/** Текст ошибки для человека: бэкенд отдаёт его в поле detail. */
+async function readError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: string; title?: string }
+    if (body.detail) return body.detail
+  } catch {
+    // тело не JSON — остаётся общий текст ниже
   }
 
-  const response = await fetch(`${baseUrl}${path}`, { signal })
+  return `Сервис ответил ${response.status}`
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!apiConfigured) {
+    throw new ApiError('Сервис ещё не подключён')
+  }
+
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}${path}`, init)
+  } catch (e) {
+    if (init?.signal?.aborted) throw e
+    throw new ApiError('Нет связи с сервисом. Проверьте интернет и попробуйте ещё раз.')
+  }
 
   if (!response.ok) {
-    throw new ApiError(`Сервис ответил ${response.status}`)
+    throw new ApiError(await readError(response))
   }
 
   return (await response.json()) as T
 }
 
-export const searchBuildings = (query: string, signal?: AbortSignal) =>
-  request<Building[]>(`/api/buildings/search?query=${encodeURIComponent(query)}`, signal)
+export const searchAddresses = (query: string, signal?: AbortSignal) =>
+  request<AddressCandidate[]>(`/api/buildings/search?query=${encodeURIComponent(query)}`, { signal })
 
-export const getBuilding = (id: number, signal?: AbortSignal) =>
-  request<Building>(`/api/buildings/${id}`, signal)
+/**
+ * Привязка дома. Пользователя бэкенд определяет по initData — параметрам, подписанным
+ * платформой. Вне MAX их нет, и привязка честно отказывает.
+ */
+export const bindBuilding = (candidate: AddressCandidate, query: string) =>
+  request<{ address: string }>('/api/me/building', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Max-Init-Data': window.WebApp?.initData ?? '',
+    },
+    body: JSON.stringify(
+      candidate.buildingId !== null
+        ? { buildingId: candidate.buildingId }
+        : { fiasId: candidate.fiasId, query },
+    ),
+  })
