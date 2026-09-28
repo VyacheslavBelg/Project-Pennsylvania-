@@ -31,7 +31,11 @@ builder.Services.AddHttpClient<IAddressSuggestService, DaDataAddressSuggestServi
 {
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DaDataOptions>>().Value;
     http.BaseAddress = new Uri(options.BaseUrl);
-    http.Timeout = TimeSpan.FromSeconds(10);
+
+    // Обычный ответ приходит за 1–3 секунды, но изредка запрос повисает. Короткий
+    // таймаут быстрее отдаёт его повторной попытке: пользователь ждёт подсказки,
+    // и десять лишних секунд заметны.
+    http.Timeout = TimeSpan.FromSeconds(5);
 
     if (options.IsConfigured)
     {
