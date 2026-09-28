@@ -24,6 +24,12 @@ public class AppUser
     /// <summary>Контакт для ответа: телефон или почта, по желанию пользователя.</summary>
     public string? ContactInfo { get; set; }
 
+    /// <summary>
+    /// Сообщение бота, которое сейчас служит экраном. Следующий экран либо заменяет его,
+    /// либо, если пользователь написал текст, приходит новым сообщением, а это удаляется.
+    /// </summary>
+    public string? LastBotMessageId { get; set; }
+
     public DateTimeOffset FirstSeenAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
 

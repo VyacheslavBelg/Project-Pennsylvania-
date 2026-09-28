@@ -19,7 +19,7 @@ namespace Domovoy.Api.Bot;
 public sealed class BindingScenario(
     DomovoyDbContext db,
     AddressLookupService lookup,
-    IMaxBotClient max,
+    BotScreen screen,
     IOptions<MaxBotOptions> options,
     ILogger<BindingScenario> logger)
 {
@@ -100,13 +100,13 @@ public sealed class BindingScenario(
 
         if (!hasBuilding)
         {
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Я понимаю команды и кнопки. Начнём с дома — он определяет применимые правила.",
                 [[MaxButton.Callback("Привязать дом", Callbacks.BindStart)]], ct);
             return;
         }
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             "Свободный текст я пока не разбираю. Выберите действие или отправьте /start.",
             [
                 [MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)],
@@ -131,10 +131,6 @@ public sealed class BindingScenario(
 
         var user = await EnsureUserAsync(callback.User.UserId, chatId.Value, callback.User.Name, ct);
 
-        // Подтверждение нажатия не должно решать судьбу действия: если платформа
-        // ответит ошибкой, пользователь всё равно получит результат.
-        await AcknowledgeAsync(callback.CallbackId, "Принято", ct);
-
         if (payload == Callbacks.ShowHouse)
         {
             await ShowEntryPointAsync(user, ct);
@@ -144,7 +140,7 @@ public sealed class BindingScenario(
         if (payload == Callbacks.BindStart || payload == Callbacks.BindReset)
         {
             await SetStepAsync(user, Steps.AwaitingAddress, ct);
-            await SendAsync(chatId.Value,
+            await SendAsync(
                 "Введите адрес дома — например, «Баумана 15» или «Ямашева 54».", ct: ct);
             return;
         }
@@ -163,18 +159,6 @@ public sealed class BindingScenario(
         }
     }
 
-    private async Task AcknowledgeAsync(string callbackId, string notification, CancellationToken ct)
-    {
-        try
-        {
-            await max.AnswerCallbackAsync(callbackId, notification, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось подтвердить нажатие кнопки, продолжаем сценарий");
-        }
-    }
-
     public async Task ShowEntryPointAsync(AppUser user, CancellationToken ct)
     {
         var link = await db.UserBuildingLinks
@@ -185,7 +169,7 @@ public sealed class BindingScenario(
         if (link is null)
         {
             // Тоже главное меню, только для непривязанного пользователя: возврат на себя не нужен.
-            await max.SendMessageAsync(user.MaxChatId,
+            await screen.ShowAsync(
                 "Домовой помогает разобраться, кто отвечает за проблему в доме и в какой срок обязан отреагировать.\n\n"
                 + "Начнём с дома — он определяет управляющую организацию и применимые правила.",
                 [[MaxButton.Callback("Привязать дом", Callbacks.BindStart)]], ct);
@@ -193,8 +177,7 @@ public sealed class BindingScenario(
         }
 
         // Это и есть главное меню — кнопка возврата на саму себя здесь не нужна.
-        await max.SendMessageAsync(user.MaxChatId,
-            DescribeBuilding(link.Building), BuildingButtons(link.Building), ct);
+        await screen.ShowAsync(DescribeBuilding(link.Building), BuildingButtons(link.Building), ct);
     }
 
     private List<List<object>> BuildingButtons(Building building)
@@ -222,7 +205,7 @@ public sealed class BindingScenario(
 
         if (found.Count == 0)
         {
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Такой адрес не найден. Попробуйте указать улицу и номер дома — например, «Баумана 15».",
                 ct: ct);
             return;
@@ -302,7 +285,7 @@ public sealed class BindingScenario(
                 + "Сведений об управляющей организации у нас пока нет.");
         }
 
-        await SendAsync(user.MaxChatId, sb.ToString(), buttons, ct);
+        await SendAsync(sb.ToString(), buttons, ct);
     }
 
     /// <summary>
@@ -352,7 +335,7 @@ public sealed class BindingScenario(
         if (stored is null || index < 0 || index >= stored.Count)
         {
             await SetStepAsync(user, Steps.AwaitingAddress, ct);
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Не удалось восстановить выбранный адрес. Введите его ещё раз.", ct: ct);
             return;
         }
@@ -370,7 +353,7 @@ public sealed class BindingScenario(
 
         if (building is null)
         {
-            await SendAsync(user.MaxChatId, "Этот дом больше недоступен, попробуйте ещё раз.", ct: ct);
+            await SendAsync("Этот дом больше недоступен, попробуйте ещё раз.", ct: ct);
             return;
         }
 
@@ -403,7 +386,7 @@ public sealed class BindingScenario(
 
         logger.LogInformation("Пользователь {User} привязан к дому {Building}", user.MaxUserId, building.Id);
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             "Дом привязан.\n\n" + DescribeBuilding(building), BuildingButtons(building), ct);
     }
 
@@ -513,10 +496,10 @@ public sealed class BindingScenario(
     }
 
     /// <summary>
-    /// Отправка с автоматическим возвратом в меню. Через неё идут все экраны сценария,
+    /// Показ экрана с автоматическим возвратом в меню. Через него идут все экраны сценария,
     /// поэтому забыть про кнопку возврата нельзя.
     /// </summary>
-    private Task SendAsync(long chatId, string text,
+    private Task SendAsync(string text,
         List<List<object>>? buttons = null, CancellationToken ct = default) =>
-        max.SendMessageAsync(chatId, text, BotUi.WithMenu(buttons), ct);
+        screen.ShowAsync(text, BotUi.WithMenu(buttons), ct);
 }

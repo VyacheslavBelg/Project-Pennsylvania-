@@ -18,7 +18,7 @@ namespace Domovoy.Api.Bot;
 public sealed class ProblemScenario(
     DomovoyDbContext db,
     ResponsibilityResolver resolver,
-    IMaxBotClient max,
+    BotScreen screen,
     ILogger<ProblemScenario> logger)
 {
     public static class Steps
@@ -53,7 +53,7 @@ public sealed class ProblemScenario(
         var building = await GetBuildingAsync(user, ct);
         if (building is null)
         {
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Сначала нужно привязать дом — от него зависят применимые правила.", ct: ct);
             return;
         }
@@ -67,7 +67,7 @@ public sealed class ProblemScenario(
         // Возврат есть на каждом шаге: случайное нажатие не должно загонять в тупик.
 
         await SetStepAsync(user, Steps.ChoosingCategory, null, ct);
-        await SendAsync(user.MaxChatId, "Что случилось?", buttons, ct);
+        await SendAsync("Что случилось?", buttons, ct);
 
         await LogAsync("scenario_started", user, building.Id, null, ct);
     }
@@ -77,7 +77,7 @@ public sealed class ProblemScenario(
         var category = await resolver.GetCategoryAsync(categoryId, ct);
         if (category is null)
         {
-            await SendAsync(user.MaxChatId, "Категория не найдена, начните заново.", ct: ct);
+            await SendAsync("Категория не найдена, начните заново.", ct: ct);
             return;
         }
 
@@ -103,7 +103,7 @@ public sealed class ProblemScenario(
         buttons.Add([MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]);
 
         await SetStepAsync(user, Steps.Clarifying, new Draft(category.Id, null, null), ct);
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             category.ClarifyingQuestion ?? "Уточните ситуацию", buttons, ct);
     }
 
@@ -125,14 +125,14 @@ public sealed class ProblemScenario(
 
         if (category is null)
         {
-            await SendAsync(user.MaxChatId, "Не удалось определить категорию, начните заново.", ct: ct);
+            await SendAsync("Не удалось определить категорию, начните заново.", ct: ct);
             return;
         }
 
         var resolution = await resolver.ResolveAsync(category, option, building, ct);
         if (resolution is null)
         {
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Для этой ситуации у меня пока нет правила. Опишите проблему словами — "
                 + "передам её как обращение общего порядка.", ct: ct);
             return;
@@ -158,7 +158,7 @@ public sealed class ProblemScenario(
         if (resolution.Zone.Code == "resident")
         {
             await SetStepAsync(user, null, null, ct);
-            await SendAsync(user.MaxChatId, text,
+            await SendAsync(text,
                 [[MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]], ct);
             return;
         }
@@ -192,7 +192,7 @@ public sealed class ProblemScenario(
 
         await SetStepAsync(user, Steps.DescribingProblem, new Draft(category.Id, option?.Id, request.Id), ct);
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             text + "\n\n———\n\nОпишите проблему своими словами — я соберу обращение. "
                  + "Или нажмите «Без описания», и я сформирую его по категории.",
             [
@@ -227,7 +227,7 @@ public sealed class ProblemScenario(
         await SetStepAsync(user, null, null, ct);
         await LogAsync("emergency_routed", user, r.Building.Id, r.Category.Code, ct);
 
-        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(),
+        await SendAsync(sb.ToString().TrimEnd(),
             [[MaxButton.Callback("Оформить обращение после звонка", Callbacks.Start)]], ct);
     }
 
@@ -236,7 +236,7 @@ public sealed class ProblemScenario(
         var draft = ReadDraft(user);
         if (draft?.RequestId is not { } requestId)
         {
-            await SendAsync(user.MaxChatId, "Сессия потерялась, начните заново.", ct: ct);
+            await SendAsync("Сессия потерялась, начните заново.", ct: ct);
             return;
         }
 
@@ -250,7 +250,7 @@ public sealed class ProblemScenario(
 
         if (request is null)
         {
-            await SendAsync(user.MaxChatId, "Обращение не найдено, начните заново.", ct: ct);
+            await SendAsync("Обращение не найдено, начните заново.", ct: ct);
             return;
         }
 
@@ -261,7 +261,7 @@ public sealed class ProblemScenario(
 
         await SetStepAsync(user, Steps.ConfirmingSubmission, draft with { RequestId = request.Id }, ct);
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             "Готовый текст обращения — скопируйте и отправьте в управляющую организацию:\n\n"
             + "———\n" + request.GeneratedText + "\n———\n\n"
             + "Отправить обращение за вас я не могу: канала в системы управляющих организаций "
@@ -280,7 +280,17 @@ public sealed class ProblemScenario(
 
         if (request is null)
         {
-            await SendAsync(user.MaxChatId, "Обращение не найдено.", ct: ct);
+            await SendAsync("Обращение не найдено.", ct: ct);
+            return;
+        }
+
+        // Повторное нажатие не должно переподавать обращение: сменился бы номер,
+        // а отсчёт срока начался бы заново — то есть нарушение отодвинулось бы.
+        if (request.Status != RequestStatus.Draft)
+        {
+            await SendAsync($"Обращение №{request.Number} уже отправлено, срок считается "
+                + $"с {DateText.ShortDate(request.SubmittedAt ?? request.CreatedAt)}.",
+                [[MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)]], ct);
             return;
         }
 
@@ -303,7 +313,7 @@ public sealed class ProblemScenario(
 
         logger.LogInformation("Обращение {Request} отправлено, срок до {Deadline}", request.Id, request.DeadlineAt);
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             $"Обращение №{request.Number} принято к отсчёту.\n\n"
             + $"Ответ должен поступить до {DateText.DateTime(request.DeadlineAt!.Value)}"
             + $" — {request.DeadlineDescription}, основание: {request.DeadlineLegalBasis}.\n\n"
@@ -318,12 +328,17 @@ public sealed class ProblemScenario(
     public async Task HandleAnsweredAsync(AppUser user, int requestId, CancellationToken ct)
     {
         var request = await db.Requests.FirstOrDefaultAsync(r => r.Id == requestId && r.AppUserId == user.Id, ct);
-        if (request is null) return;
+        if (request is null)
+        {
+            await SendAsync("Обращение не найдено.",
+                [[MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)]], ct);
+            return;
+        }
 
         request.Status = RequestStatus.Answered;
         await db.SaveChangesAsync(ct);
 
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             $"Обращение №{request.Number}: отметил, что ответ получен. Если проблему "
             + "не решили по существу — можно подать обращение заново.",
             [
@@ -340,15 +355,24 @@ public sealed class ProblemScenario(
             .Include(r => r.ResponsibilityZone)
             .FirstOrDefaultAsync(r => r.Id == requestId && r.AppUserId == user.Id, ct);
 
-        if (request is null) return;
+        if (request is null)
+        {
+            await SendAsync("Обращение не найдено.",
+                [[MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)]], ct);
+            return;
+        }
 
-        request.Status = RequestStatus.Escalated;
-        await db.SaveChangesAsync(ct);
-        await LogAsync("escalation_opened", user, request.BuildingId, request.ProblemCategory.Code, ct);
+        // Повторный показ уже собранной жалобы — не новая эскалация.
+        if (request.Status != RequestStatus.Escalated)
+        {
+            request.Status = RequestStatus.Escalated;
+            await db.SaveChangesAsync(ct);
+            await LogAsync("escalation_opened", user, request.BuildingId, request.ProblemCategory.Code, ct);
+        }
 
         var apartment = await GetApartmentAsync(user, request.BuildingId, ct);
 
-        await SendAsync(user.MaxChatId, BuildEscalationText(request, user, apartment),
+        await SendAsync(BuildEscalationText(request, user, apartment),
             [
                 [MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)],
                 [MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]
@@ -506,10 +530,10 @@ public sealed class ProblemScenario(
     }
 
     /// <summary>
-    /// Отправка с автоматическим возвратом в меню. Через неё идут все экраны сценария,
+    /// Показ экрана с автоматическим возвратом в меню. Через него идут все экраны сценария,
     /// поэтому забыть про кнопку возврата нельзя.
     /// </summary>
-    private Task SendAsync(long chatId, string text,
+    private Task SendAsync(string text,
         List<List<object>>? buttons = null, CancellationToken ct = default) =>
-        max.SendMessageAsync(chatId, text, BotUi.WithMenu(buttons), ct);
+        screen.ShowAsync(text, BotUi.WithMenu(buttons), ct);
 }

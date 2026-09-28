@@ -17,7 +17,7 @@ namespace Domovoy.Api.Bot;
 /// </summary>
 public sealed class ProfileScenario(
     DomovoyDbContext db,
-    IMaxBotClient max)
+    BotScreen screen)
 {
     public static class Steps
     {
@@ -35,13 +35,20 @@ public sealed class ProfileScenario(
         public const string Skip = "profile:skip";
     }
 
-    public async Task ShowAsync(AppUser user, CancellationToken ct)
+    /// <param name="notice">Подтверждение предыдущего действия — строкой над профилем,
+    /// а не отдельным сообщением, которое тут же сменилось бы экраном.</param>
+    public async Task ShowAsync(AppUser user, CancellationToken ct, string? notice = null)
     {
         var link = await db.UserBuildingLinks
             .Include(l => l.Building).ThenInclude(b => b.Address)
             .FirstOrDefaultAsync(l => l.AppUserId == user.Id, ct);
 
         var sb = new StringBuilder();
+        if (notice is { Length: > 0 })
+        {
+            sb.AppendLine($"✅ {notice}");
+            sb.AppendLine();
+        }
         sb.AppendLine("Ваши данные для обращений");
         sb.AppendLine();
         sb.AppendLine($"ФИО: {user.FullName ?? "не указано"}");
@@ -55,7 +62,7 @@ public sealed class ProfileScenario(
             sb.AppendLine("этого требует порядок работы с обращениями граждан.");
         }
 
-        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(),
+        await SendAsync(sb.ToString().TrimEnd(),
         [
             [MaxButton.Callback("Указать ФИО", Callbacks.EditName)],
             [MaxButton.Callback("Указать квартиру", Callbacks.EditApartment)],
@@ -66,7 +73,7 @@ public sealed class ProfileScenario(
     public async Task AskFullNameAsync(AppUser user, CancellationToken ct)
     {
         await SetStepAsync(user, Steps.AwaitingFullName, ct);
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             "Напишите фамилию, имя и отчество — они попадут в текст обращения.\n\n"
             + "Например: Иванов Иван Иванович",
             [[MaxButton.Callback("Пропустить", Callbacks.Skip)]], ct);
@@ -75,7 +82,7 @@ public sealed class ProfileScenario(
     public async Task AskApartmentAsync(AppUser user, CancellationToken ct)
     {
         await SetStepAsync(user, Steps.AwaitingApartment, ct);
-        await SendAsync(user.MaxChatId,
+        await SendAsync(
             "Напишите номер квартиры — он нужен как адрес для ответа.",
             [[MaxButton.Callback("Пропустить", Callbacks.Skip)]], ct);
     }
@@ -86,8 +93,7 @@ public sealed class ProfileScenario(
         await SetStepAsync(user, null, ct);
         await db.SaveChangesAsync(ct);
 
-        await SendAsync(user.MaxChatId, $"Записал: {user.FullName}", ct: ct);
-        await ShowAsync(user, ct);
+        await ShowAsync(user, ct, $"Записал: {user.FullName}");
     }
 
     public async Task SaveApartmentAsync(AppUser user, string value, CancellationToken ct)
@@ -96,7 +102,7 @@ public sealed class ProfileScenario(
 
         if (link is null)
         {
-            await SendAsync(user.MaxChatId, "Сначала привяжите дом.", ct: ct);
+            await SendAsync("Сначала привяжите дом.", ct: ct);
             return;
         }
 
@@ -104,8 +110,7 @@ public sealed class ProfileScenario(
         await SetStepAsync(user, null, ct);
         await db.SaveChangesAsync(ct);
 
-        await SendAsync(user.MaxChatId, $"Записал квартиру: {link.Apartment}", ct: ct);
-        await ShowAsync(user, ct);
+        await ShowAsync(user, ct, $"Записал квартиру: {link.Apartment}");
     }
 
     public async Task SkipAsync(AppUser user, CancellationToken ct)
@@ -133,7 +138,7 @@ public sealed class ProfileScenario(
 
         if (requests.Count == 0)
         {
-            await SendAsync(user.MaxChatId,
+            await SendAsync(
                 "Отправленных обращений пока нет.",
                 [[MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)]], ct);
             return;
@@ -168,7 +173,7 @@ public sealed class ProfileScenario(
 
         buttons.Add([MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)]);
 
-        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(), buttons, ct);
+        await SendAsync(sb.ToString().TrimEnd(), buttons, ct);
     }
 
     /// <summary>
@@ -190,7 +195,7 @@ public sealed class ProfileScenario(
 
         if (r is null)
         {
-            await SendAsync(user.MaxChatId, "Обращение не найдено.",
+            await SendAsync("Обращение не найдено.",
                 [[MaxButton.Callback("Мои обращения", Callbacks.MyRequests)]], ct);
             return;
         }
@@ -228,15 +233,18 @@ public sealed class ProfileScenario(
                 $"{ProblemScenario.Callbacks.Answered}{r.Id}")]);
         }
 
-        if (r.Status == RequestStatus.Breached)
+        // Текст жалобы не хранится, а экран один: вернуться к нему можно только отсюда,
+        // поэтому кнопка остаётся и после того, как жалоба уже собрана.
+        if (r.Status is RequestStatus.Breached or RequestStatus.Escalated)
         {
-            buttons.Add([MaxButton.Callback("Жалоба в инспекцию",
+            buttons.Add([MaxButton.Callback(
+                r.Status == RequestStatus.Breached ? "Жалоба в инспекцию" : "Текст жалобы в инспекцию",
                 $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
         }
 
         buttons.Add([MaxButton.Callback("‹ К списку обращений", Callbacks.MyRequests)]);
 
-        await SendAsync(user.MaxChatId, sb.ToString().TrimEnd(), buttons, ct);
+        await SendAsync(sb.ToString().TrimEnd(), buttons, ct);
     }
 
     /// <summary>Подпись кнопки: MAX обрезает длинные, обрезаем сами и осмысленно.</summary>
@@ -290,10 +298,10 @@ public sealed class ProfileScenario(
     }
 
     /// <summary>
-    /// Отправка с автоматическим возвратом в меню. Через неё идут все экраны сценария,
+    /// Показ экрана с автоматическим возвратом в меню. Через него идут все экраны сценария,
     /// поэтому забыть про кнопку возврата нельзя.
     /// </summary>
-    private Task SendAsync(long chatId, string text,
+    private Task SendAsync(string text,
         List<List<object>>? buttons = null, CancellationToken ct = default) =>
-        max.SendMessageAsync(chatId, text, BotUi.WithMenu(buttons), ct);
+        screen.ShowAsync(text, BotUi.WithMenu(buttons), ct);
 }

@@ -16,8 +16,7 @@ public sealed class ScenarioRouter(
     BindingScenario binding,
     ProblemScenario problem,
     ProfileScenario profile,
-    IMaxBotClient max,
-    ILogger<ScenarioRouter> logger)
+    BotScreen screen)
 {
     public async Task HandleAsync(MaxUpdate update, CancellationToken ct)
     {
@@ -30,6 +29,24 @@ public sealed class ScenarioRouter(
         var (maxUserId, chatId, name) = identity.Value;
         var user = await EnsureUserAsync(maxUserId, chatId, name, ct);
 
+        // У нажатия кнопки запоминаем и само сообщение: следующий экран заменит именно его.
+        var isCallback = update.UpdateType == MaxUpdate.MessageCallback;
+        screen.Begin(user,
+            isCallback ? update.Callback?.CallbackId : null,
+            isCallback ? update.Message?.Body?.Mid : null);
+
+        try
+        {
+            await DispatchAsync(user, update, ct);
+        }
+        finally
+        {
+            await screen.CompleteAsync(ct);
+        }
+    }
+
+    private async Task DispatchAsync(AppUser user, MaxUpdate update, CancellationToken ct)
+    {
         if (update.UpdateType == MaxUpdate.MessageCallback)
         {
             await HandleCallbackAsync(user, update, ct);
@@ -76,16 +93,6 @@ public sealed class ScenarioRouter(
         if (callback?.CallbackId is null || payload is null)
         {
             return;
-        }
-
-        // Подтверждаем нажатие сразу, но не даём его сбою сорвать действие.
-        try
-        {
-            await max.AnswerCallbackAsync(callback.CallbackId, "Принято", ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Не удалось подтвердить нажатие кнопки, продолжаем сценарий");
         }
 
         // Возврат в меню работает из любого шага, в том числе из чужого сценария.

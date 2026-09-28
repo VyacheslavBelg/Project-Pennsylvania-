@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,7 +13,8 @@ public interface IMaxBotClient
 
     Task<MaxUpdatesResponse?> GetUpdatesAsync(long? marker, CancellationToken ct = default);
 
-    Task SendMessageAsync(long chatId, string text, IReadOnlyList<IReadOnlyList<object>>? keyboard = null,
+    /// <summary>Отправляет сообщение и возвращает его идентификатор.</summary>
+    Task<string?> SendMessageAsync(long chatId, string text, IReadOnlyList<IReadOnlyList<object>>? keyboard = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -20,6 +22,16 @@ public interface IMaxBotClient
     /// либо notification, либо message — иначе возвращает 400.
     /// </summary>
     Task AnswerCallbackAsync(string callbackId, string notification, CancellationToken ct = default);
+
+    /// <summary>
+    /// Отвечает на нажатие, заменяя сообщение с кнопкой новым содержимым. Возвращает false,
+    /// если платформа отказала: об ошибке она сообщает статусом 200 и success=false.
+    /// </summary>
+    Task<bool> ReplaceOnCallbackAsync(string callbackId, string text,
+        IReadOnlyList<IReadOnlyList<object>>? keyboard, CancellationToken ct = default);
+
+    /// <summary>Удаляет сообщение. В личном диалоге бот может удалять только свои.</summary>
+    Task<bool> DeleteMessageAsync(string messageId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -68,23 +80,67 @@ public sealed class MaxBotClient(
         return await response.Content.ReadFromJsonAsync<MaxUpdatesResponse>(Json, ct);
     }
 
-    public async Task SendMessageAsync(long chatId, string text,
+    public async Task<string?> SendMessageAsync(long chatId, string text,
         IReadOnlyList<IReadOnlyList<object>>? keyboard = null, CancellationToken ct = default)
     {
-        object payload = keyboard is null or { Count: 0 }
-            ? new { text }
-            : new
-            {
-                text,
-                attachments = new object[]
-                {
-                    new { type = "inline_keyboard", payload = new { buttons = keyboard } }
-                }
-            };
-
-        using var response = await http.PostAsJsonAsync($"/messages?chat_id={chatId}", payload, Json, ct);
+        using var response = await http.PostAsJsonAsync(
+            $"/messages?chat_id={chatId}", MessageBody(text, keyboard), Json, ct);
         await EnsureSuccessAsync(response, "POST /messages", ct);
+
+        var sent = await response.Content.ReadFromJsonAsync<SendResult>(Json, ct);
+        return sent?.Message?.Body?.Mid;
     }
+
+    public async Task<bool> ReplaceOnCallbackAsync(string callbackId, string text,
+        IReadOnlyList<IReadOnlyList<object>>? keyboard, CancellationToken ct = default)
+    {
+        using var response = await http.PostAsJsonAsync(
+            $"/answers?callback_id={Uri.EscapeDataString(callbackId)}",
+            new { message = MessageBody(text, keyboard) }, Json, ct);
+        await EnsureSuccessAsync(response, "POST /answers", ct);
+
+        return await IsSuccessAsync(response, "POST /answers", ct);
+    }
+
+    public async Task<bool> DeleteMessageAsync(string messageId, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync(
+            $"/messages?message_id={Uri.EscapeDataString(messageId)}", ct);
+        await EnsureSuccessAsync(response, "DELETE /messages", ct);
+
+        return await IsSuccessAsync(response, "DELETE /messages", ct);
+    }
+
+    /// <summary>
+    /// Тело сообщения. Вложения передаются всегда, даже пустым списком: при замене
+    /// сообщения отсутствие поля оставило бы на месте старые кнопки.
+    /// </summary>
+    private static object MessageBody(string text, IReadOnlyList<IReadOnlyList<object>>? keyboard) => new
+    {
+        text,
+        attachments = keyboard is null or { Count: 0 }
+            ? Array.Empty<object>()
+            : new object[] { new { type = "inline_keyboard", payload = new { buttons = keyboard } } }
+    };
+
+    private async Task<bool> IsSuccessAsync(HttpResponseMessage response, string what, CancellationToken ct)
+    {
+        var result = await response.Content.ReadFromJsonAsync<SimpleResult>(Json, ct);
+        if (result?.Success == true)
+        {
+            return true;
+        }
+
+        logger.LogWarning("{What}: платформа отказала — {Message}", what, result?.Message);
+        return false;
+    }
+
+    private sealed record SendResult(
+        [property: JsonPropertyName("message")] MaxMessage? Message);
+
+    private sealed record SimpleResult(
+        [property: JsonPropertyName("success")] bool Success,
+        [property: JsonPropertyName("message")] string? Message);
 
     public async Task AnswerCallbackAsync(string callbackId, string notification,
         CancellationToken ct = default)
