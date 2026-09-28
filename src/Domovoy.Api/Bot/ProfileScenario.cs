@@ -58,8 +58,8 @@ public sealed class ProfileScenario(
         if (user.FullName is null or { Length: 0 })
         {
             sb.AppendLine();
-            sb.AppendLine("Без ФИО и адреса обращение могут оставить без рассмотрения:");
-            sb.AppendLine("этого требует порядок работы с обращениями граждан.");
+            sb.AppendLine("Без ФИО и адреса обращение могут оставить без рассмотрения: "
+                          + "этого требует порядок работы с обращениями граждан.");
         }
 
         await SendAsync(sb.ToString().TrimEnd(),
