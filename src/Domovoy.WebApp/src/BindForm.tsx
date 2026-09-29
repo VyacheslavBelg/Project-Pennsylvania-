@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState } from 'react'
-import { Button, CellList, CellSimple, Input, Panel, Spinner, Typography } from '@maxhub/max-ui'
+import { useEffect, useState } from 'react'
+import { Button, Input, Panel, Spinner, Typography } from '@maxhub/max-ui'
 import { ApiError, bindBuilding, searchAddresses, type AddressItem, type AddressSearchResult } from './api'
 
 /** Сколько символов нужно, чтобы поиск имел смысл. */
@@ -7,6 +7,17 @@ const MIN_QUERY = 3
 
 const messageOf = (e: unknown) =>
   e instanceof ApiError ? e.message : 'Что-то пошло не так. Попробуйте ещё раз.'
+
+/** Крупное сообщение по центру: пустой поиск, загрузка, ошибка. */
+function Notice({ icon, title, text }: { icon: string; title: string; text?: string }) {
+  return (
+    <div className="notice">
+      <div className="notice__icon">{icon}</div>
+      <div className="notice__title">{title}</div>
+      {text && <div className="notice__text">{text}</div>}
+    </div>
+  )
+}
 
 /**
  * Выбор дома в мини-приложении.
@@ -78,13 +89,12 @@ export function BindForm() {
   if (bound) {
     return (
       <Panel className="app">
-        <header className="app__header">
-          <Typography.Title>✅ Дом привязан</Typography.Title>
-          <Typography.Body>{bound}</Typography.Body>
-        </header>
-        <CellList mode="island">
-          <CellSimple title="Карточка дома уже в чате с ботом" subtitle="Там же — «Сообщить о проблеме»" />
-        </CellList>
+        <div className="card card--center">
+          <div className="notice__icon">✅</div>
+          <Typography.Title>Дом привязан</Typography.Title>
+          <p className="card__address card__address--center">{bound}</p>
+          <p className="footnote">Карточка дома уже в чате с ботом — там же «Сообщить о проблеме».</p>
+        </div>
         {typeof window.WebApp?.close === 'function' && (
           <Button size="large" stretched onClick={() => window.WebApp?.close?.()}>
             Вернуться в чат
@@ -97,46 +107,71 @@ export function BindForm() {
   const renderResults = () => {
     if (tooShort) {
       return (
-        <CellList mode="island">
-          <CellSimple title="Начните вводить адрес" subtitle="Улица и номер дома, например «Баумана 15»" />
-        </CellList>
+        <div className="card">
+          <Notice
+            icon="🔍"
+            title="Начните вводить адрес"
+            text="Улица и номер дома — например, «Баумана 15». Город можно добавить, если домов найдётся много."
+          />
+        </div>
       )
     }
 
     if (searching && !found) {
       return (
-        <CellList mode="island">
-          <CellSimple title="Ищем дом…" before={<Spinner />} />
-        </CellList>
+        <div className="card">
+          <Notice icon="⏳" title="Ищем дом…" />
+        </div>
+      )
+    }
+
+    if (error) {
+      return (
+        <div className="card">
+          <Notice icon="⚠️" title="Не получилось" text={error} />
+        </div>
       )
     }
 
     if (!found || found.total === 0) {
       return (
-        <CellList mode="island">
-          <CellSimple
+        <div className="card">
+          <Notice
+            icon="🏚"
             title="Ничего не нашлось"
-            subtitle="Проверьте написание или добавьте город, например «Казань Баумана 15»"
+            text="Проверьте написание или добавьте город — например, «Казань Баумана 15»."
           />
-        </CellList>
+        </div>
       )
     }
 
     return found.groups.map((group, gi) => (
-      <CellList key={group.header || gi} header={group.header || undefined} mode="island">
-        {group.items.map((item, i) => (
-          <CellSimple
-            key={item.fiasId ?? item.buildingId ?? item.display}
-            title={item.label}
-            subtitle={item.managingOrganization ?? undefined}
-            after={binding === item ? <Spinner /> : undefined}
-            showChevron={binding !== item}
-            disabled={binding !== null}
-            onClick={() => binding === null && void choose(item)}
-            separator={i < group.items.length - 1}
-          />
-        ))}
-      </CellList>
+      <section className="group" key={group.header || gi}>
+        {group.header && <h3 className="group__header">{group.header}</h3>}
+
+        <div className="group__body">
+          {group.items.map((item, i) => (
+            <button
+              type="button"
+              className="row"
+              key={item.fiasId ?? item.buildingId ?? item.display}
+              disabled={binding !== null}
+              onClick={() => void choose(item)}
+            >
+              <span className="row__main">
+                <span className="row__title">{item.label}</span>
+                {item.managingOrganization && (
+                  <span className="row__note">{item.managingOrganization}</span>
+                )}
+              </span>
+              <span className="row__tail">
+                {binding === item ? <Spinner /> : <span className="row__chevron">›</span>}
+              </span>
+              {i < group.items.length - 1 && <span className="row__divider" />}
+            </button>
+          ))}
+        </div>
+      </section>
     ))
   }
 
@@ -144,46 +179,42 @@ export function BindForm() {
     <Panel className="app">
       <header className="app__header">
         <Typography.Title>Выбор дома</Typography.Title>
-        <Typography.Body>Дом определяет, кто отвечает за проблему и какие правила применимы</Typography.Body>
+        <Typography.Body className="app__lead">
+          Дом определяет, кто отвечает за проблему и какие правила применимы
+        </Typography.Body>
       </header>
 
       {!insideMax && (
-        <CellList mode="island">
-          <CellSimple
-            title="Откройте форму из чата с ботом"
-            subtitle="Искать адрес можно и здесь, но привязать дом получится только внутри MAX"
-          />
-        </CellList>
+        <div className="banner">
+          Откройте форму из чата с ботом: искать адрес можно и здесь, но привязать дом
+          получится только внутри MAX.
+        </div>
       )}
 
-      <Input
-        placeholder="Улица и номер дома"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        withClearButton
-        autoFocus
-      />
+      <div className="card card--field">
+        <Input
+          placeholder="Улица и номер дома"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          withClearButton
+          autoFocus
+        />
+      </div>
 
-      {error && !tooShort && (
-        <CellList mode="island">
-          <CellSimple title="Не получилось" subtitle={error} />
-        </CellList>
-      )}
-
-      <Fragment>{renderResults()}</Fragment>
+      {renderResults()}
 
       {!tooShort && found && found.limitReached && (
-        <Typography.Body className="app__hint">
-          Показаны {found.total} самых подходящих — больше адресный реестр за один запрос не отдаёт.
-          Если вашего дома нет, уточните адрес: город, корпус или строение.
-        </Typography.Body>
+        <p className="footnote">
+          Показаны {found.total} самых подходящих — больше адресный реестр за один запрос
+          не отдаёт. Если вашего дома нет, уточните адрес: город, корпус или строение.
+        </p>
       )}
 
       {!tooShort && found && found.fromRegistryOnly && (
-        <Typography.Body className="app__hint">
-          Адреса — из государственного адресного реестра (ФИАС). Сведений об управляющей организации
-          этих домов у нас пока нет.
-        </Typography.Body>
+        <p className="footnote">
+          Адреса — из государственного адресного реестра (ФИАС). Сведений об управляющей
+          организации этих домов у нас пока нет: разбор проблемы и срок от них не зависят.
+        </p>
       )}
     </Panel>
   )

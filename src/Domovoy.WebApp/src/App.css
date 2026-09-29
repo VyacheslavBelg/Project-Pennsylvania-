@@ -284,3 +284,156 @@
 .app__lead {
   color: var(--text-secondary);
 }
+
+/* ─── Группа результатов поиска ─────────────────────────────────────────── */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Заголовок вынесен над карточкой: так граница группы видна без разделителей. */
+.group__header {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-detail-strong);
+  line-height: 1.35;
+}
+
+.group__body {
+  border-radius: 16px;
+  background: var(--background-card);
+  overflow: hidden;
+}
+
+/* ─── Строка выбора ─────────────────────────────────────────────────────── */
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Палец должен попадать по строке, а не по тексту. */
+  min-height: 52px;
+}
+
+.row:active {
+  background: var(--background-secondary);
+}
+
+.row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.row__title {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  line-height: 1.35;
+}
+
+.row__note {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-detail);
+  line-height: 1.35;
+}
+
+.row__tail {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.row__chevron {
+  color: var(--text-tertiary);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Разделитель с отступом слева — как в системных списках. */
+.row__divider {
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--divider-primary);
+}
+
+/* ─── Сообщение по центру карточки ──────────────────────────────────────── */
+
+.card--center {
+  align-items: center;
+  text-align: center;
+  padding: 28px 20px;
+}
+
+.card--field {
+  padding: 12px;
+}
+
+.card__address--center {
+  margin: 0;
+  text-align: center;
+}
+
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.notice__icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.notice__title {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-body-strong);
+}
+
+.notice__text {
+  max-width: 34em;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-description);
+  line-height: 1.45;
+}
+
+/* ─── Предупреждение ────────────────────────────────────────────────────── */
+
+.banner {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(240, 160, 32, 0.14);
+  color: var(--text-primary);
+  font-size: var(--font-size-description);
+  line-height: 1.45;
+}
+
+.card--fields {
+  gap: 16px;
+  padding: 16px 12px;
+}

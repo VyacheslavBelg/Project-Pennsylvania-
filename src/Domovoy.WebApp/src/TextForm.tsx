@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, CellList, CellSimple, Input, Panel, Spinner, Textarea, Typography } from '@maxhub/max-ui'
+import { Button, Input, Panel, Spinner, Textarea, Typography } from '@maxhub/max-ui'
 import { ApiError, loadProfile, saveDescription, saveProfile, type Profile } from './api'
 
 const messageOf = (e: unknown) =>
@@ -9,10 +9,11 @@ const messageOf = (e: unknown) =>
 function Done({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <Panel className="app">
-      <header className="app__header">
-        <Typography.Title>✅ {title}</Typography.Title>
-        <Typography.Body>{subtitle}</Typography.Body>
-      </header>
+      <div className="card card--center">
+        <div className="notice__icon">✅</div>
+        <Typography.Title>{title}</Typography.Title>
+        <p className="footnote">{subtitle}</p>
+      </div>
       {typeof window.WebApp?.close === 'function' && (
         <Button size="large" stretched onClick={() => window.WebApp?.close?.()}>
           Вернуться в чат
@@ -22,15 +23,25 @@ function Done({ title, subtitle }: { title: string; subtitle: string }) {
   )
 }
 
-/** Предупреждение снаружи MAX: искать и смотреть можно, сохранять — нет. */
+/** Предупреждение снаружи MAX: смотреть можно, сохранять — нет. */
 function OutsideMaxNotice() {
   return (
-    <CellList mode="island">
-      <CellSimple
-        title="Откройте форму из чата с ботом"
-        subtitle="Сохранить данные можно только внутри MAX"
-      />
-    </CellList>
+    <div className="banner">
+      Откройте форму из чата с ботом: сохранить данные можно только внутри MAX.
+    </div>
+  )
+}
+
+/** Ошибка действия — заметным блоком, а не строкой в общем потоке. */
+function Failure({ text }: { text: string }) {
+  return (
+    <div className="card">
+      <div className="notice">
+        <div className="notice__icon">⚠️</div>
+        <div className="notice__title">Не получилось</div>
+        <div className="notice__text">{text}</div>
+      </div>
+    </div>
   )
 }
 
@@ -79,24 +90,22 @@ export function DescribeForm() {
 
       {!insideMax && <OutsideMaxNotice />}
 
-      <Textarea
-        placeholder="Например: с потолка в ванной третий день капает вода, на стене мокрое пятно"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={6}
-        autoFocus
-      />
+      <div className="card card--field">
+        <Textarea
+          placeholder="Например: с потолка в ванной третий день капает вода, на стене мокрое пятно"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={6}
+          autoFocus
+        />
+      </div>
 
-      <Typography.Body className="app__hint">
+      <p className="footnote">
         Полезно указать, где именно, когда началось и что уже предпринимали.
         Можно отправить и без описания — обращение соберётся по выбранной теме.
-      </Typography.Body>
+      </p>
 
-      {error && (
-        <CellList mode="island">
-          <CellSimple title="Не получилось" subtitle={error} />
-        </CellList>
-      )}
+      {error && <Failure text={error} />}
 
       <Button size="large" stretched disabled={saving || !insideMax} onClick={() => void submit()}>
         {saving ? <Spinner /> : 'Сохранить и собрать обращение'}
@@ -174,11 +183,14 @@ export function ProfileForm() {
       {!insideMax && <OutsideMaxNotice />}
 
       {loading ? (
-        <CellList mode="island">
-          <CellSimple title="Загружаем данные…" before={<Spinner />} />
-        </CellList>
+        <div className="card">
+          <div className="notice">
+            <Spinner />
+            <div className="notice__title">Загружаем данные…</div>
+          </div>
+        </div>
       ) : (
-        <>
+        <div className="card card--fields">
           <Input
             placeholder="Фамилия Имя Отчество"
             value={fullName}
@@ -195,14 +207,10 @@ export function ProfileForm() {
             hint={profile?.address ?? 'Дом пока не привязан'}
             withClearButton
           />
-        </>
+        </div>
       )}
 
-      {error && (
-        <CellList mode="island">
-          <CellSimple title="Не получилось" subtitle={error} />
-        </CellList>
-      )}
+      {error && <Failure text={error} />}
 
       <Button
         size="large"
