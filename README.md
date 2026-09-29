@@ -92,6 +92,12 @@ docker compose up -d --build
 Рабочие значения в репозиторий не попадают: `.env` исключён через `.gitignore`.
 Шаблон — `.env.example`.
 
+Если порт 8080 или 8081 уже занят, Docker откажется стартовать с сообщением
+`ports are not available`. Тогда достаточно переопределить публикуемые порты:
+`docker compose -f compose.yaml -f compose.ports.yaml up -d --build`, где в файле
+`compose.ports.yaml` для нужного сервиса указано `ports: !override ["18080:8080"]`.
+Внутри контейнеров порты не меняются.
+
 ## Используемые порты
 
 | Порт | Сервис | Назначение |
