@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Button, CellList, CellSimple, Input, Panel, Spinner, Typography } from '@maxhub/max-ui'
-import { ApiError, bindBuilding, searchAddresses, type AddressCandidate } from './api'
-
-/** Столько вариантов отдаёт поиск; если пришло столько же — вариантов может быть больше. */
-const SEARCH_LIMIT = 10
+import { ApiError, bindBuilding, searchAddresses, type AddressItem, type AddressSearchResult } from './api'
 
 /** Сколько символов нужно, чтобы поиск имел смысл. */
 const MIN_QUERY = 3
@@ -12,40 +9,21 @@ const messageOf = (e: unknown) =>
   e instanceof ApiError ? e.message : 'Что-то пошло не так. Попробуйте ещё раз.'
 
 /**
- * Общее начало адресов — одной строкой над списком, в строках только то, чем дома
- * отличаются. Так же устроен выбор дома в боте: у корпусов одного дома различается
- * только хвост адреса.
- */
-function splitCommonPrefix(addresses: string[]): { common: string; tails: string[] } {
-  const parts = addresses.map((a) => a.split(', '))
-  let common = 0
-
-  if (parts.length > 1) {
-    const limit = Math.min(...parts.map((p) => p.length)) - 1
-    while (common < limit && parts.every((p) => p[common].toLowerCase() === parts[0][common].toLowerCase())) {
-      common++
-    }
-  }
-
-  return {
-    common: parts[0]?.slice(0, common).join(', ') ?? '',
-    tails: parts.map((p) => p.slice(common).join(', ')),
-  }
-}
-
-/**
  * Выбор дома в мини-приложении.
  *
- * Бот не может удалять сообщения пользователя, и каждый введённый в чат адрес оставался
- * в переписке. Ввод в форме в чат не попадает, а результат приходит туда сам: бэкенд
- * заменяет экран ввода адреса карточкой дома.
+ * Бот не может удалять сообщения пользователя — в личном диалоге MAX отвечает на это 403, —
+ * и каждый введённый в чат адрес оставался в переписке. Ввод в форме в чат не попадает,
+ * а результат приходит туда сам: бэкенд заменяет экран ввода карточкой дома.
+ *
+ * Раскладку списка — группировку по населённым пунктам и подписи строк — готовит бэкенд,
+ * чтобы выдача в форме и в боте выглядела одинаково.
  */
 export function BindForm() {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<AddressCandidate[] | null>(null)
+  const [found, setFound] = useState<AddressSearchResult | null>(null)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [binding, setBinding] = useState<AddressCandidate | null>(null)
+  const [binding, setBinding] = useState<AddressItem | null>(null)
   const [bound, setBound] = useState<string | null>(null)
 
   const insideMax = Boolean(window.WebApp?.initData)
@@ -63,8 +41,8 @@ export function BindForm() {
     const timer = setTimeout(() => {
       setSearching(true)
       searchAddresses(trimmed, controller.signal)
-        .then((found) => {
-          setResults(found)
+        .then((result) => {
+          setFound(result)
           setError(null)
         })
         .catch((e: unknown) => {
@@ -81,17 +59,12 @@ export function BindForm() {
     }
   }, [trimmed, tooShort])
 
-  const { common, tails } = useMemo(
-    () => splitCommonPrefix((results ?? []).map((r) => r.display)),
-    [results],
-  )
-
-  const choose = async (candidate: AddressCandidate) => {
-    setBinding(candidate)
+  const choose = async (item: AddressItem) => {
+    setBinding(item)
     setError(null)
 
     try {
-      const { address } = await bindBuilding(candidate, trimmed)
+      const { address } = await bindBuilding(item, trimmed)
       setBound(address)
       // Карточка дома уже в чате — форма своё сделала.
       setTimeout(() => window.WebApp?.close?.(), 1500)
@@ -123,33 +96,47 @@ export function BindForm() {
 
   const renderResults = () => {
     if (tooShort) {
-      return <CellSimple title="Начните вводить адрес" subtitle="Улица и номер дома, например «Баумана 15»" />
-    }
-
-    if (searching && !results) {
-      return <CellSimple title="Ищем дом…" before={<Spinner />} />
-    }
-
-    if (!results || results.length === 0) {
       return (
-        <CellSimple
-          title="Ничего не нашлось"
-          subtitle="Проверьте написание или добавьте город, например «Казань Баумана 15»"
-        />
+        <CellList mode="island">
+          <CellSimple title="Начните вводить адрес" subtitle="Улица и номер дома, например «Баумана 15»" />
+        </CellList>
       )
     }
 
-    return results.map((candidate, i) => (
-      <CellSimple
-        key={candidate.fiasId ?? candidate.buildingId ?? candidate.display}
-        title={tails[i]}
-        subtitle={candidate.managingOrganization ?? undefined}
-        after={binding === candidate ? <Spinner /> : undefined}
-        showChevron={binding !== candidate}
-        disabled={binding !== null}
-        onClick={() => binding === null && void choose(candidate)}
-        separator={i < results.length - 1}
-      />
+    if (searching && !found) {
+      return (
+        <CellList mode="island">
+          <CellSimple title="Ищем дом…" before={<Spinner />} />
+        </CellList>
+      )
+    }
+
+    if (!found || found.total === 0) {
+      return (
+        <CellList mode="island">
+          <CellSimple
+            title="Ничего не нашлось"
+            subtitle="Проверьте написание или добавьте город, например «Казань Баумана 15»"
+          />
+        </CellList>
+      )
+    }
+
+    return found.groups.map((group, gi) => (
+      <CellList key={group.header || gi} header={group.header || undefined} mode="island">
+        {group.items.map((item, i) => (
+          <CellSimple
+            key={item.fiasId ?? item.buildingId ?? item.display}
+            title={item.label}
+            subtitle={item.managingOrganization ?? undefined}
+            after={binding === item ? <Spinner /> : undefined}
+            showChevron={binding !== item}
+            disabled={binding !== null}
+            onClick={() => binding === null && void choose(item)}
+            separator={i < group.items.length - 1}
+          />
+        ))}
+      </CellList>
     ))
   }
 
@@ -183,17 +170,16 @@ export function BindForm() {
         </CellList>
       )}
 
-      <CellList header={(!tooShort && common) || undefined} mode="island">
-        {renderResults()}
-      </CellList>
+      <Fragment>{renderResults()}</Fragment>
 
-      {!tooShort && results && results.length >= SEARCH_LIMIT && (
+      {!tooShort && found && found.limitReached && (
         <Typography.Body className="app__hint">
-          Показаны первые {results.length}. Если вашего дома нет — уточните адрес: корпус, строение или город.
+          Показаны {found.total} самых подходящих — больше адресный реестр за один запрос не отдаёт.
+          Если вашего дома нет, уточните адрес: город, корпус или строение.
         </Typography.Body>
       )}
 
-      {!tooShort && results && results.length > 0 && results.every((r) => !r.knownHouse) && (
+      {!tooShort && found && found.fromRegistryOnly && (
         <Typography.Body className="app__hint">
           Адреса — из государственного адресного реестра (ФИАС). Сведений об управляющей организации
           этих домов у нас пока нет.

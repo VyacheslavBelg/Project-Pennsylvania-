@@ -1,18 +1,38 @@
-// Адрес бэкенда задаётся на сборке. Пока прод-хостинг не поднят (задача 0.5),
-// переменная пустая, и приложение обязано осмысленно работать без API.
+// Адрес бэкенда задаётся на сборке переменной VITE_API_BASE_URL.
+// Пустое значение означает, что сервис не подключён, и приложение говорит об этом прямо.
 
 const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export const apiConfigured = baseUrl.length > 0
 
-/** Вариант дома из поиска: свой дом по идентификатору либо адрес из реестра. */
-export interface AddressCandidate {
-  buildingId: number | null
+/** Дом в выдаче поиска. */
+export interface AddressItem {
+  /** Подпись внутри группы: то, чем дом отличается от соседей по населённому пункту. */
+  label: string
+  /** Полный адрес — для подтверждения выбора. */
   display: string
-  knownHouse: boolean
-  managingOrganization: string | null
+  buildingId: number | null
   fiasId: string | null
-  source: string
+  managingOrganization: string | null
+}
+
+/** Дома одного населённого пункта под общим заголовком. */
+export interface AddressGroup {
+  header: string
+  items: AddressItem[]
+}
+
+/**
+ * Раскладку готовит бэкенд, а не форма: она одна на бота и мини-приложение,
+ * и списки в них выглядят одинаково.
+ */
+export interface AddressSearchResult {
+  total: number
+  /** Выдача упёрлась в предел реестра — вариантов может быть больше. */
+  limitReached: boolean
+  /** Все найденные дома распознаны по реестру, сведений об управляющей организации нет. */
+  fromRegistryOnly: boolean
+  groups: AddressGroup[]
 }
 
 export class ApiError extends Error {}
@@ -50,13 +70,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const searchAddresses = (query: string, signal?: AbortSignal) =>
-  request<AddressCandidate[]>(`/api/buildings/search?query=${encodeURIComponent(query)}`, { signal })
+  request<AddressSearchResult>(`/api/buildings/search?query=${encodeURIComponent(query)}`, { signal })
 
 /**
  * Привязка дома. Пользователя бэкенд определяет по initData — параметрам, подписанным
  * платформой. Вне MAX их нет, и привязка честно отказывает.
  */
-export const bindBuilding = (candidate: AddressCandidate, query: string) =>
+export const bindBuilding = (item: AddressItem, query: string) =>
   request<{ address: string }>('/api/me/building', {
     method: 'POST',
     headers: {
@@ -64,8 +84,8 @@ export const bindBuilding = (candidate: AddressCandidate, query: string) =>
       'X-Max-Init-Data': window.WebApp?.initData ?? '',
     },
     body: JSON.stringify(
-      candidate.buildingId !== null
-        ? { buildingId: candidate.buildingId }
-        : { fiasId: candidate.fiasId, query },
+      item.buildingId !== null
+        ? { buildingId: item.buildingId }
+        : { fiasId: item.fiasId, query },
     ),
   })
