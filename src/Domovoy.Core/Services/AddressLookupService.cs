@@ -9,13 +9,59 @@ namespace Domovoy.Core.Services;
 /// KnownHouse означает, что у нас есть сведения об управляющей организации;
 /// иначе адрес распознан, но региональные данные ещё не загружены.
 /// </summary>
+/// <param name="Locality">Населённый пункт с регионом — заголовок группы в списке.</param>
+/// <param name="Line">Улица и дом внутри населённого пункта.</param>
 public sealed record BuildingCandidate(
     string Display,
+    string Locality,
+    string Line,
     int? BuildingId,
     SuggestedAddress? Suggested,
     string? ManagingOrganizationName)
 {
     public bool KnownHouse => BuildingId is not null;
+
+    public static BuildingCandidate FromBuilding(Building b, string? managingOrganization) =>
+        new(b.Address.ToFullString(), b.Address.Locality, b.Address.StreetLine,
+            b.Id, null, managingOrganization);
+
+    /// <summary>
+    /// Подсказка реестра. Населённый пункт выделяется из готовой строки, а не собирается
+    /// из полей: в строке реестра есть тип строения — «зд 12» и «д 12» разные дома —
+    /// и район города, которых в разобранных полях нет.
+    /// </summary>
+    public static BuildingCandidate FromSuggestion(SuggestedAddress s)
+    {
+        var (locality, line) = SplitAtLocality(s.Display, s.City, s.Region);
+        return new BuildingCandidate(s.Display, locality, line, null, s, null);
+    }
+
+    private static (string Locality, string Line) SplitAtLocality(string display, string? city, string? region)
+    {
+        if (city is { Length: > 0 })
+        {
+            // «…, г Новокузнецк, р-н Заводской, ул Климасенко, зд 12»
+            var marker = $", {city}, ";
+            var at = display.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (at >= 0)
+            {
+                return (display[..(at + marker.Length - 2)], display[(at + marker.Length)..]);
+            }
+
+            // Город федерального значения стоит первым: «г Москва, ул Тверская, д 13».
+            if (display.StartsWith($"{city}, ", StringComparison.OrdinalIgnoreCase))
+            {
+                return (city, display[(city.Length + 2)..]);
+            }
+        }
+
+        if (region is { Length: > 0 } && display.StartsWith($"{region}, ", StringComparison.OrdinalIgnoreCase))
+        {
+            return (region, display[(region.Length + 2)..]);
+        }
+
+        return (string.Empty, display);
+    }
 }
 
 /// <summary>
@@ -31,10 +77,10 @@ public sealed class AddressLookupService(
     IAddressSuggestService suggest)
 {
     /// <summary>
-    /// Сколько домов предлагать. Столько же отдаёт DaData по умолчанию; больше — уже стена
-    /// текста на экране телефона, и тогда полезнее попросить уточнить адрес.
+    /// Сколько домов предлагать: столько, сколько реестр отдаёт за один запрос. Больше
+    /// DaData не возвращает, и дальше вариантов можно только сузить — городом или корпусом.
     /// </summary>
-    public const int MaxResults = 10;
+    public const int MaxResults = 20;
 
     public async Task<IReadOnlyList<BuildingCandidate>> FindAsync(
         string query, CancellationToken ct = default)
@@ -47,8 +93,7 @@ public sealed class AddressLookupService(
         if (curated.Count > 0)
         {
             return curated
-                .Select(b => new BuildingCandidate(
-                    b.Address.ToFullString(), b.Id, null, b.ManagingOrganization?.Name))
+                .Select(b => BuildingCandidate.FromBuilding(b, b.ManagingOrganization?.Name))
                 .ToList();
         }
 
@@ -69,7 +114,7 @@ public sealed class AddressLookupService(
                 continue;
             }
 
-            result.Add(new BuildingCandidate(s.Display, null, s, null));
+            result.Add(BuildingCandidate.FromSuggestion(s));
         }
 
         // Сохранённые дома, которых нет среди подсказок, — запасной путь: например,
@@ -81,7 +126,7 @@ public sealed class AddressLookupService(
                 continue;
             }
 
-            result.Add(new BuildingCandidate(b.Address.ToFullString(), b.Id, null, null));
+            result.Add(BuildingCandidate.FromBuilding(b, null));
         }
 
         return result.Take(MaxResults).ToList();

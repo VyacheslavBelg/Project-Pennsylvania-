@@ -33,18 +33,29 @@ public static class ApiEndpoints
         {
             var found = await lookup.FindAsync(query, ct);
 
-            return Results.Ok(found.Select(c => new
+            // Раскладка по населённым пунктам та же, что в боте: выглядят одинаково.
+            return Results.Ok(new
             {
-                buildingId = c.BuildingId,
-                display = c.Display,
-                knownHouse = c.KnownHouse,
-                managingOrganization = c.ManagingOrganizationName,
-                fiasId = c.Suggested?.FiasId,
-                source = c.KnownHouse
-                    ? "Данные о доме загружены в систему"
-                    : "Адрес распознан по государственному адресному реестру (ФИАС); "
-                      + "сведений об управляющей организации нет"
-            }));
+                total = found.Count,
+                limitReached = found.Count >= AddressLookupService.MaxResults,
+                fromRegistryOnly = found.Count > 0 && found.All(c => !c.KnownHouse),
+                groups = AddressGrouping.Group(found).Select(g => new
+                {
+                    header = g.Header,
+                    items = g.Items.Select(i =>
+                    {
+                        var c = found[i.Index];
+                        return new
+                        {
+                            label = i.Label,
+                            display = c.Display,
+                            buildingId = c.BuildingId,
+                            fiasId = c.Suggested?.FiasId,
+                            managingOrganization = c.ManagingOrganizationName
+                        };
+                    })
+                })
+            });
         });
 
         // Привязка дома из формы мини-приложения. Ввод в форме не оставляет сообщений

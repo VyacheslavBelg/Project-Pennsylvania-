@@ -23,18 +23,26 @@ public class Address
 
     public Building? Building { get; set; }
 
-    public override string ToString() => Block is { Length: > 0 } block
-        ? $"{City}, {Street}, д. {House}, {block}"
-        : $"{City}, {Street}, д. {House}";
+    /// <summary>Улица и дом: «ул. Баумана, д. 15, к 1».</summary>
+    public string StreetLine => Block is { Length: > 0 } block
+        ? $"{Street}, д. {House}, {block}"
+        : $"{Street}, д. {House}";
+
+    /// <summary>
+    /// Населённый пункт с регионом. У городов федерального значения реестр отдаёт регион
+    /// и город одинаковыми («г Москва»), и тогда регион не повторяется.
+    /// </summary>
+    public string Locality =>
+        Region is { Length: > 0 } region && !string.Equals(region, City, StringComparison.OrdinalIgnoreCase)
+            ? $"{region}, {City}"
+            : City;
+
+    public override string ToString() => $"{City}, {StreetLine}";
 
     /// <summary>
     /// Адрес с регионом — для карточки дома и текста обращения. Без региона «рп Новоспасское»
     /// или «пгт Октябрьский» неоднозначны: одноимённых посёлков в стране десятки, а адрес
-    /// уходит в документ. У городов федерального значения реестр отдаёт регион и город
-    /// одинаковыми, и тогда регион не повторяется.
+    /// уходит в документ.
     /// </summary>
-    public string ToFullString() =>
-        Region is { Length: > 0 } region && !string.Equals(region, City, StringComparison.OrdinalIgnoreCase)
-            ? $"{region}, {this}"
-            : ToString();
+    public string ToFullString() => $"{Locality}, {StreetLine}";
 }

@@ -235,68 +235,80 @@ public sealed class BindingScenario(
             await SetStepAsync(user, Steps.AwaitingAddress, ct, JsonSerializer.Serialize(suggested));
         }
 
-        var (common, tails) = SplitCommonPrefix([.. found.Select(c => c.Display)]);
-
-        var sb = new StringBuilder();
-        var buttons = new List<List<object>>();
+        // Кнопка ведёт к варианту по его месту в исходной выдаче: в этом порядке
+        // подсказки реестра сохранены в состоянии диалога.
+        var payloads = new List<string>(found.Count);
         var suggestedIndex = 0;
+        foreach (var candidate in found)
+        {
+            payloads.Add(candidate.KnownHouse
+                ? $"{Callbacks.BindPick}{candidate.BuildingId}"
+                : $"{Callbacks.BindSuggested}{suggestedIndex++}");
+        }
+
+        var lines = new List<string>();
+        var buttons = new List<List<object>>();
 
         if (found.Count == 1)
         {
             // Нумеровать единственный вариант незачем.
-            sb.AppendLine("Нашёлся один дом:");
-            sb.AppendLine();
-            sb.Append($"🏠 {found[0].Display}");
+            lines.Add("Нашёлся один дом:");
+            lines.Add("");
+            lines.Add($"🏠 {found[0].Display}");
 
-            buttons.Add([MaxButton.Callback("Да, это мой дом", PayloadFor(found[0], ref suggestedIndex))]);
+            buttons.Add([MaxButton.Callback("Да, это мой дом", payloads[0])]);
         }
         else
         {
-            sb.Append($"Нашлось домов: {found.Count}");
+            var groups = AddressGrouping.Group(found);
 
-            // Общая часть адреса выносится наверх: повторять её в каждой строке
-            // значит утопить в ней то, чем дома отличаются.
-            if (common.Length > 0)
+            lines.Add(groups.Count > 1
+                ? $"Нашлось домов: {found.Count} в {groups.Count} населённых пунктах"
+                : $"Нашлось домов: {found.Count}");
+
+            // Номера сквозные по показанному списку; order помнит, какой вариант
+            // стоит за каждым номером.
+            var order = new List<int>(found.Count);
+
+            foreach (var group in groups)
             {
-                sb.AppendLine();
-                sb.AppendLine();
-                sb.Append($"🏠 {common}");
+                lines.Add("");
+                if (group.Header.Length > 0)
+                {
+                    lines.Add($"🏠 {group.Header}");
+                }
+
+                foreach (var item in group.Items)
+                {
+                    order.Add(item.Index);
+                    lines.Add($"{order.Count} — {item.Label}");
+                }
             }
 
-            sb.AppendLine();
+            lines.Add("");
+            lines.Add("Нажмите номер своего дома.");
 
-            for (var i = 0; i < found.Count; i++)
-            {
-                sb.AppendLine();
-                sb.Append($"{i + 1} — {tails[i]}");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine();
-            sb.Append("Нажмите номер своего дома.");
-
-            // Список упёрся в предел — значит, вариантов может быть больше, и нужного
-            // среди показанных может не оказаться. Шаг ввода адреса при этом ещё открыт.
+            // Больше реестр за один запрос не отдаёт: вариантов может быть больше,
+            // и нужного среди показанных может не оказаться. Шаг ввода адреса открыт.
             if (found.Count >= AddressLookupService.MaxResults)
             {
-                sb.AppendLine();
-                sb.AppendLine();
-                sb.Append($"Показаны первые {found.Count}. Если вашего дома нет — напишите адрес "
-                    + "точнее: с корпусом, строением или городом.");
+                lines.Add("");
+                lines.Add($"Показаны {found.Count} самых подходящих — больше адресный реестр "
+                    + "за один запрос не отдаёт. Если вашего дома нет, напишите адрес точнее: "
+                    + "с городом, корпусом или строением.");
             }
 
             // Подпись кнопки — только номер: адрес в неё не помещается, а обрезанный
-            // выглядит одинаково у соседних корпусов. Номера идут в ряд, чтобы список
-            // кнопок не растягивался на пол-экрана.
+            // выглядит одинаково у соседних корпусов. Номера идут в ряд.
             const int perRow = 5;
 
-            for (var i = 0; i < found.Count; i += perRow)
+            for (var i = 0; i < order.Count; i += perRow)
             {
                 var row = new List<object>();
 
-                for (var j = i; j < Math.Min(i + perRow, found.Count); j++)
+                for (var j = i; j < Math.Min(i + perRow, order.Count); j++)
                 {
-                    row.Add(MaxButton.Callback($"{j + 1}", PayloadFor(found[j], ref suggestedIndex)));
+                    row.Add(MaxButton.Callback($"{j + 1}", payloads[order[j]]));
                 }
 
                 buttons.Add(row);
@@ -305,48 +317,12 @@ public sealed class BindingScenario(
 
         if (found.All(c => !c.KnownHouse))
         {
-            sb.AppendLine();
-            sb.AppendLine();
-            sb.Append("Адрес распознан по государственному адресному реестру. "
+            lines.Add("");
+            lines.Add("Адрес распознан по государственному адресному реестру. "
                 + "Сведений об управляющей организации у нас пока нет.");
         }
 
-        await SendAsync(sb.ToString(), buttons, ct);
-    }
-
-    /// <summary>
-    /// Дома из своей базы выбираются по идентификатору, распознанные реестром — по позиции
-    /// в сохранённом списке подсказок, поэтому счётчик считает только вторые.
-    /// </summary>
-    private static string PayloadFor(BuildingCandidate candidate, ref int suggestedIndex) =>
-        candidate.KnownHouse
-            ? $"{Callbacks.BindPick}{candidate.BuildingId}"
-            : $"{Callbacks.BindSuggested}{suggestedIndex++}";
-
-    /// <summary>
-    /// Убирает общее начало адресов. Когда найдены корпуса одного дома, на кнопке
-    /// остаётся «д. 12 к 1»; когда дома в разных городах, общего начала нет
-    /// и адрес сокращается уже по длине.
-    /// </summary>
-    private static (string Common, List<string> Tails) SplitCommonPrefix(List<string> addresses)
-    {
-        var parts = addresses.Select(a => a.Split(", ")).ToList();
-        var common = 0;
-
-        if (parts.Count > 1)
-        {
-            // Последний сегмент не забираем: без него у кнопки не осталось бы подписи.
-            var limit = parts.Min(p => p.Length) - 1;
-
-            while (common < limit
-                   && parts.All(p => string.Equals(p[common], parts[0][common], StringComparison.OrdinalIgnoreCase)))
-            {
-                common++;
-            }
-        }
-
-        return (string.Join(", ", parts[0].Take(common)),
-                [.. parts.Select(p => string.Join(", ", p.Skip(common)))]);
+        await SendAsync(string.Join("\n", lines), buttons, ct);
     }
 
     private async Task BindSuggestedAsync(AppUser user, int index, CancellationToken ct)
