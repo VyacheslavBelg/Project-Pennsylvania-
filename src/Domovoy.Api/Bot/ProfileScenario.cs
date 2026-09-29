@@ -17,8 +17,12 @@ namespace Domovoy.Api.Bot;
 /// </summary>
 public sealed class ProfileScenario(
     DomovoyDbContext db,
-    BotScreen screen)
+    BotScreen screen,
+    WebForms forms)
 {
+    /// <summary>Экран мини-приложения с полями ФИО и квартиры.</summary>
+    private const string ProfileForm = "profile";
+
     public static class Steps
     {
         public const string AwaitingFullName = "profile:name";
@@ -62,12 +66,22 @@ public sealed class ProfileScenario(
                           + "этого требует порядок работы с обращениями граждан.");
         }
 
-        await SendAsync(sb.ToString().TrimEnd(),
-        [
-            [MaxButton.Callback("Указать ФИО", Callbacks.EditName)],
-            [MaxButton.Callback("Указать квартиру", Callbacks.EditApartment)],
-            [MaxButton.Callback("Мои обращения", Callbacks.MyRequests)]
-        ], ct);
+        var buttons = new List<List<object>>();
+
+        // Форма заполняет оба поля разом и не оставляет следов в переписке.
+        if (forms.Enabled)
+        {
+            buttons.Add([forms.Button("✍️ Заполнить в форме", ProfileForm)]);
+        }
+        else
+        {
+            buttons.Add([MaxButton.Callback("Указать ФИО", Callbacks.EditName)]);
+            buttons.Add([MaxButton.Callback("Указать квартиру", Callbacks.EditApartment)]);
+        }
+
+        buttons.Add([MaxButton.Callback("Мои обращения", Callbacks.MyRequests)]);
+
+        await SendAsync(sb.ToString().TrimEnd(), buttons, ct);
     }
 
     public async Task AskFullNameAsync(AppUser user, CancellationToken ct)
@@ -111,6 +125,39 @@ public sealed class ProfileScenario(
         await db.SaveChangesAsync(ct);
 
         await ShowAsync(user, ct, $"Записал квартиру: {link.Apartment}");
+    }
+
+    /// <summary>
+    /// Сохранение обоих полей разом — из формы мини-приложения, где они на одном экране.
+    /// Пустое значение означает «не меняем»: форма шлёт только заполненные поля.
+    /// </summary>
+    public async Task SaveProfileAsync(AppUser user, string? fullName, string? apartment, CancellationToken ct)
+    {
+        var saved = new List<string>();
+
+        if (fullName is { Length: > 0 })
+        {
+            user.FullName = fullName.Trim();
+            saved.Add("ФИО");
+        }
+
+        if (apartment is { Length: > 0 })
+        {
+            var link = await db.UserBuildingLinks.FirstOrDefaultAsync(l => l.AppUserId == user.Id, ct);
+            if (link is null)
+            {
+                await SendAsync("Сначала привяжите дом.", ct: ct);
+                return;
+            }
+
+            link.Apartment = apartment.Trim();
+            saved.Add("квартиру");
+        }
+
+        await SetStepAsync(user, null, ct);
+        await db.SaveChangesAsync(ct);
+
+        await ShowAsync(user, ct, saved.Count > 0 ? $"Записал {string.Join(" и ", saved)}" : null);
     }
 
     public async Task SkipAsync(AppUser user, CancellationToken ct)

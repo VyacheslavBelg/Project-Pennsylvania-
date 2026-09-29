@@ -10,6 +10,12 @@ namespace Domovoy.Api.Endpoints;
 /// <summary>Выбор дома в форме: свой дом по идентификатору либо дом из реестра по ФИАС.</summary>
 public sealed record BindBuildingRequest(int? BuildingId, string? FiasId, string? Query);
 
+/// <summary>Описание проблемы своими словами из формы.</summary>
+public sealed record DescriptionRequest(string? Text);
+
+/// <summary>Данные жителя для обращения. Пустое поле означает «не менять».</summary>
+public sealed record ProfileRequest(string? FullName, string? Apartment);
+
 /// <summary>
 /// REST для мини-приложения.
 ///
@@ -55,6 +61,108 @@ public static class ApiEndpoints
                         };
                     })
                 })
+            });
+        });
+
+        // Действия из формы мини-приложения. Ввод в форме не оставляет сообщений
+        // в переписке, а результат показывается в чате: экран бота сменяется следующим.
+        //
+        // Пользователь определяется только по подписанному платформой initData.
+        // Идентификатору в теле запроса верить нельзя: форма открыта на стороннем домене.
+        async Task<(AppUser User, IResult? Error)> IdentifyAsync(
+            HttpRequest http, MaxInitDataValidator auth, DomovoyDbContext db,
+            BotScreen screen, CancellationToken ct)
+        {
+            if (auth.Validate(http.Headers[MaxInitDataValidator.Header]) is not { } identity)
+            {
+                return (null!, Results.Problem("Откройте форму из бота в MAX.",
+                    statusCode: StatusCodes.Status401Unauthorized));
+            }
+
+            var user = await db.Users
+                .Include(u => u.DialogState)
+                .FirstOrDefaultAsync(u => u.MaxUserId == identity.UserId, ct);
+
+            // Результат показывается в чате с ботом, а чат известен только после того,
+            // как пользователь хотя бы раз ему написал.
+            if (user is null)
+            {
+                return (null!, Results.Problem("Сначала откройте бота в MAX.",
+                    statusCode: StatusCodes.Status404NotFound));
+            }
+
+            screen.Begin(user, null, null);
+            return (user, null);
+        }
+
+        // Описание проблемы: раньше его набирали сообщением в чат, и оно оставалось
+        // в переписке — удалять сообщения пользователя платформа боту не даёт.
+        app.MapPost("/api/me/request/description", async (
+            DescriptionRequest body,
+            HttpRequest http,
+            MaxInitDataValidator auth,
+            DomovoyDbContext db,
+            ProblemScenario problem,
+            BotScreen screen,
+            CancellationToken ct) =>
+        {
+            var (user, error) = await IdentifyAsync(http, auth, db, screen, ct);
+            if (error is not null) return error;
+
+            var text = body.Text?.Trim();
+            await problem.HandleDescriptionAsync(user, text is { Length: > 0 } ? text : null, ct);
+
+            return Results.Ok(new { saved = true });
+        });
+
+        // Данные жителя: ФИО и квартира нужны, чтобы обращение не оставили
+        // без рассмотрения, и в чате им тоже не место.
+        app.MapPost("/api/me/profile", async (
+            ProfileRequest body,
+            HttpRequest http,
+            MaxInitDataValidator auth,
+            DomovoyDbContext db,
+            ProfileScenario profile,
+            BotScreen screen,
+            CancellationToken ct) =>
+        {
+            var (user, error) = await IdentifyAsync(http, auth, db, screen, ct);
+            if (error is not null) return error;
+
+            await profile.SaveProfileAsync(user, body.FullName, body.Apartment, ct);
+
+            return Results.Ok(new { saved = true });
+        });
+
+        // Текущие данные жителя — чтобы форма открылась уже заполненной.
+        app.MapGet("/api/me/profile", async (
+            HttpRequest http,
+            MaxInitDataValidator auth,
+            DomovoyDbContext db,
+            CancellationToken ct) =>
+        {
+            if (auth.Validate(http.Headers[MaxInitDataValidator.Header]) is not { } identity)
+            {
+                return Results.Problem("Откройте форму из бота в MAX.",
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.MaxUserId == identity.UserId, ct);
+            if (user is null)
+            {
+                return Results.Problem("Сначала откройте бота в MAX.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+
+            var link = await db.UserBuildingLinks
+                .Include(l => l.Building).ThenInclude(b => b.Address)
+                .FirstOrDefaultAsync(l => l.AppUserId == user.Id, ct);
+
+            return Results.Ok(new
+            {
+                fullName = user.FullName,
+                apartment = link?.Apartment,
+                address = link?.Building.Address.ToFullString()
             });
         });
 

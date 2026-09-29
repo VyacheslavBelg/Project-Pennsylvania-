@@ -19,6 +19,7 @@ public sealed class ProblemScenario(
     DomovoyDbContext db,
     ResponsibilityResolver resolver,
     BotScreen screen,
+    WebForms forms,
     ILogger<ProblemScenario> logger)
 {
     public static class Steps
@@ -41,6 +42,9 @@ public sealed class ProblemScenario(
         public const string BackToMenu = "problem:back:menu";
         public const string BackToCategories = "problem:back:cats";
     }
+
+    /// <summary>Экран мини-приложения с полем описания проблемы.</summary>
+    private const string DescribeForm = "describe";
 
     /// <summary>Категория повторных обращений: у неё есть вход в уже поданные через бота.</summary>
     private const string FollowUpCategory = "followup";
@@ -192,13 +196,25 @@ public sealed class ProblemScenario(
 
         await SetStepAsync(user, Steps.DescribingProblem, new Draft(category.Id, option?.Id, request.Id), ct);
 
+        var describeButtons = new List<List<object>>();
+
+        // Форма — основной путь: набранное сообщением остаётся в переписке навсегда,
+        // удалять сообщения пользователя платформа боту не даёт.
+        if (forms.Enabled)
+        {
+            describeButtons.Add([forms.Button("✍️ Описать в форме", DescribeForm)]);
+        }
+
+        describeButtons.Add([MaxButton.Callback("Без описания", Callbacks.SkipDescription)]);
+        describeButtons.Add([MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]);
+
         await SendAsync(
-            text + "\n\n———\n\nОпишите проблему своими словами — я соберу обращение. "
-                 + "Или нажмите «Без описания», и я сформирую его по категории.",
-            [
-                [MaxButton.Callback("Без описания", Callbacks.SkipDescription)],
-                [MaxButton.Callback("‹ К списку проблем", Callbacks.BackToCategories)]
-            ], ct);
+            text + "\n\n———\n\n" + (forms.Enabled
+                ? "Опишите проблему своими словами — в форме, чтобы текст не остался в переписке. "
+                  + "Можно и сообщением сюда. Или нажмите «Без описания»."
+                : "Опишите проблему своими словами — я соберу обращение. "
+                  + "Или нажмите «Без описания», и я сформирую его по категории."),
+            describeButtons, ct);
     }
 
     private async Task ShowEmergencyAsync(AppUser user, Resolution r, CancellationToken ct)

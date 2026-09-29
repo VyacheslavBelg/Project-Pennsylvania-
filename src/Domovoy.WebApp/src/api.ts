@@ -35,6 +35,13 @@ export interface AddressSearchResult {
   groups: AddressGroup[]
 }
 
+/** Данные жителя для подстановки в обращение. */
+export interface Profile {
+  fullName: string | null
+  apartment: string | null
+  address: string | null
+}
+
 export class ApiError extends Error {}
 
 /** Текст ошибки для человека: бэкенд отдаёт его в поле detail. */
@@ -69,6 +76,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Заголовок с подписанными платформой параметрами: по ним бэкенд узнаёт пользователя. */
+const authorized = (): HeadersInit => ({
+  'Content-Type': 'application/json',
+  'X-Max-Init-Data': window.WebApp?.initData ?? '',
+})
+
+export const loadProfile = (signal?: AbortSignal) =>
+  request<Profile>('/api/me/profile', { headers: authorized(), signal })
+
+export const saveProfile = (fullName: string, apartment: string) =>
+  request<{ saved: boolean }>('/api/me/profile', {
+    method: 'POST',
+    headers: authorized(),
+    body: JSON.stringify({ fullName, apartment }),
+  })
+
+export const saveDescription = (text: string) =>
+  request<{ saved: boolean }>('/api/me/request/description', {
+    method: 'POST',
+    headers: authorized(),
+    body: JSON.stringify({ text }),
+  })
+
 export const searchAddresses = (query: string, signal?: AbortSignal) =>
   request<AddressSearchResult>(`/api/buildings/search?query=${encodeURIComponent(query)}`, { signal })
 
@@ -79,10 +109,7 @@ export const searchAddresses = (query: string, signal?: AbortSignal) =>
 export const bindBuilding = (item: AddressItem, query: string) =>
   request<{ address: string }>('/api/me/building', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Max-Init-Data': window.WebApp?.initData ?? '',
-    },
+    headers: authorized(),
     body: JSON.stringify(
       item.buildingId !== null
         ? { buildingId: item.buildingId }

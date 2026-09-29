@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CellList, CellSimple, Panel, Typography } from '@maxhub/max-ui'
 import { BindForm } from './BindForm'
+import { DescribeForm, ProfileForm } from './TextForm'
 import './App.css'
 
 interface BridgeInfo {
@@ -10,7 +11,10 @@ interface BridgeInfo {
   insideMax: boolean
 }
 
-type View = 'home' | 'bind'
+type View = 'home' | 'bind' | 'describe' | 'profile'
+
+/** Экраны, которые бот открывает параметром запуска. */
+const VIEWS: readonly View[] = ['bind', 'describe', 'profile']
 
 /**
  * Экран, который просит бот. Внутри MAX параметр запуска приходит в initData, вне MAX
@@ -19,7 +23,7 @@ type View = 'home' | 'bind'
 function startView(): View {
   const params = new URLSearchParams(window.location.search)
   const value = window.WebApp?.initDataUnsafe?.start_param ?? params.get('startapp') ?? params.get('view')
-  return value === 'bind' ? 'bind' : 'home'
+  return VIEWS.includes(value as View) ? (value as View) : 'home'
 }
 
 /**
@@ -63,6 +67,14 @@ export default function App() {
     return <BindForm />
   }
 
+  if (view === 'describe') {
+    return <DescribeForm />
+  }
+
+  if (view === 'profile') {
+    return <ProfileForm />
+  }
+
   return (
     <Panel className="app">
       <header className="app__header">
@@ -77,7 +89,14 @@ export default function App() {
           title="Выбрать или сменить дом"
           subtitle="Поиск по государственному адресному реестру"
           showChevron
+          separator
           onClick={() => setView('bind')}
+        />
+        <CellSimple
+          title="Мои данные"
+          subtitle="ФИО и квартира для текста обращения"
+          showChevron
+          onClick={() => setView('profile')}
         />
       </CellList>
 
