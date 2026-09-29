@@ -92,19 +92,52 @@
 
 /* ─── Карточка обращения ────────────────────────────────────────────────── */
 
-.card__body {
+.card {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--background-card);
+}
+
+.card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  padding: 12px 16px 16px;
+}
+
+.card__number {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-detail-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__subject {
+  margin: 0;
+  font-size: var(--font-size-subheader);
+  font-weight: var(--font-weight-subheader);
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.card__address {
+  /* Отрицательный отступ убирает двойной зазор: тема и адрес — один блок. */
+  margin: -8px 0 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-description);
+  line-height: 1.4;
 }
 
 .pill {
-  align-self: flex-start;
-  padding: 3px 10px;
+  flex: none;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: var(--font-size-detail);
   font-weight: var(--font-weight-detail-strong);
+  white-space: nowrap;
 }
 
 .pill--wait {
@@ -122,72 +155,132 @@
   background: rgba(26, 190, 67, 0.14);
 }
 
-.card__timer {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
+/* ─── Отсчёт срока ──────────────────────────────────────────────────────── */
+
+.timer {
+  padding: 14px;
   border-radius: 12px;
   background: var(--background-secondary);
 }
 
-.card__clock {
+.timer__value {
   /* Моноширинные цифры: иначе таймер дёргается на каждом тике. */
   font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-header);
+  font-weight: var(--font-weight-header);
+  line-height: 1.2;
   color: var(--accent-blue);
 }
 
-.card__timer--late .card__clock {
+.timer--late .timer__value {
   color: var(--accent-red);
 }
 
-.card__caption,
-.card__basis,
-.card__deadline {
+.timer__caption {
+  margin-top: 2px;
   color: var(--text-tertiary);
+  font-size: var(--font-size-detail);
+  line-height: 1.4;
 }
 
-.card__bar {
+.timer__bar {
   height: 5px;
-  margin-top: 4px;
+  margin-top: 10px;
   border-radius: 3px;
   background: var(--divider-primary);
   overflow: hidden;
 }
 
-.card__bar-fill {
+.timer__bar-fill {
   height: 100%;
   border-radius: 3px;
   background: var(--accent-blue);
   transition: width 1s linear;
 }
 
-.card__timer--late .card__bar-fill {
+.timer--late .timer__bar-fill {
   background: var(--accent-red);
 }
 
-.card__text summary {
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: var(--font-size-description);
+/* ─── Факты: общая колонка названий даёт ровную сетку ───────────────────── */
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.card__text pre {
-  margin: 8px 0 0;
-  padding: 12px;
-  border-radius: 10px;
+.fact {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--font-size-description);
+  line-height: 1.4;
+}
+
+.fact__name {
+  color: var(--text-tertiary);
+}
+
+.fact__value {
+  color: var(--text-primary);
+}
+
+/* ─── Готовый текст обращения ───────────────────────────────────────────── */
+
+.doc {
+  border: 1px solid var(--divider-primary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.doc__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--background-secondary);
+}
+
+.doc__title {
+  color: var(--text-secondary);
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-detail-strong);
+}
+
+.doc__copy {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 122, 255, 0.14);
+  color: var(--accent-blue);
+  font: inherit;
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-detail-strong);
+  cursor: pointer;
+}
+
+.doc__text {
+  padding: 14px 12px;
   white-space: pre-wrap;
   word-break: break-word;
-  font: inherit;
   font-size: var(--font-size-description);
-  color: var(--text-secondary);
+  line-height: 1.55;
+  color: var(--text-primary);
 }
 
 /* ─── Подпись внизу экрана ──────────────────────────────────────────────── */
 
 .footnote {
+  margin: 0;
   padding: 4px 4px 0;
   color: var(--text-tertiary);
   font-size: var(--font-size-detail);
+  line-height: 1.45;
+}
+
+.app__lead {
+  color: var(--text-secondary);
 }

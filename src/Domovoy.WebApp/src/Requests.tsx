@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Button, CellList, CellSimple, Panel, Spinner, Typography } from '@maxhub/max-ui'
 import { ApiError, loadRequests, type RequestCard } from './api'
 import { remaining } from './Countdown'
-import { Emblem, type Tone } from './Emblem'
 
 const messageOf = (e: unknown) =>
   e instanceof ApiError ? e.message : 'Что-то пошло не так. Попробуйте ещё раз.'
@@ -21,59 +20,82 @@ function shortDate(iso: string): string {
 
 interface StatusLook {
   label: string
-  /** Цвет плашки состояния. */
-  pill: 'wait' | 'late' | 'done'
-  /** Цвет значка и эмодзи слева от заголовка. */
-  tone: Tone
+  tone: 'wait' | 'late' | 'done'
   icon: string
 }
 
-/** Состояние обращения словами — те же формулировки, что показывает бот. */
+/** Состояние обращения — те же формулировки, что показывает бот. */
 function describeStatus(status: string): StatusLook {
   switch (status) {
     case 'Submitted':
-      return { label: 'Ждём ответа', pill: 'wait', tone: 'blue', icon: '⏳' }
+      return { label: 'Ждём ответа', tone: 'wait', icon: '⏳' }
     case 'Answered':
-      return { label: 'Ответ получен', pill: 'done', tone: 'green', icon: '✅' }
+      return { label: 'Ответ получен', tone: 'done', icon: '✅' }
     case 'Breached':
-      return { label: 'Срок нарушен', pill: 'late', tone: 'red', icon: '❗' }
+      return { label: 'Срок нарушен', tone: 'late', icon: '❗' }
     case 'Escalated':
-      return { label: 'Жалоба подготовлена', pill: 'late', tone: 'red', icon: '📨' }
+      return { label: 'Жалоба подготовлена', tone: 'late', icon: '📨' }
     case 'Closed':
-      return { label: 'Закрыто', pill: 'done', tone: 'green', icon: '✅' }
+      return { label: 'Закрыто', tone: 'done', icon: '✅' }
     default:
-      return { label: 'Черновик', pill: 'wait', tone: 'blue', icon: '✏️' }
+      return { label: 'Черновик', tone: 'wait', icon: '✏️' }
   }
 }
 
+/** Строка «свойство — значение» с общей колонкой: из них складывается ровная сетка. */
+function Fact({ name, value }: { name: string; value: string }) {
+  return (
+    <div className="fact">
+      <span className="fact__name">{name}</span>
+      <span className="fact__value">{value}</span>
+    </div>
+  )
+}
+
 /** Живой отсчёт до истечения норматива. */
-function Deadline({ request, now }: { request: RequestCard; now: number }) {
+function Timer({ request, now }: { request: RequestCard; now: number }) {
   if (request.deadlineAt === null) {
     return null
   }
 
   const left = remaining(request.deadlineAt, request.submittedAt, now)
-  const tracked = request.status === 'Submitted' || request.status === 'Breached'
 
-  if (!tracked) {
-    return (
-      <Typography.Body className="card__deadline">
-        Норматив: {request.deadlineDescription}
-      </Typography.Body>
-    )
+  return (
+    <div className={`timer timer--${left.overdue ? 'late' : 'wait'}`}>
+      <div className="timer__value">{left.overdue ? `Просрочено на ${left.text}` : left.text}</div>
+      <div className="timer__caption">
+        {left.overdue ? 'Ответа нет — это основание для жалобы в инспекцию' : 'до истечения норматива'}
+      </div>
+      <div className="timer__bar">
+        <div className="timer__bar-fill" style={{ width: `${Math.round(left.progress * 100)}%` }} />
+      </div>
+    </div>
+  )
+}
+
+/** Текст обращения: его нужно скопировать и отправить, поэтому рядом кнопка копирования. */
+function GeneratedText({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Буфер обмена может быть недоступен — текст всё равно виден и выделяется.
+    }
   }
 
   return (
-    <div className={`card__timer card__timer--${left.overdue ? 'late' : 'wait'}`}>
-      <Typography.Title className="card__clock">
-        {left.overdue ? `Просрочено на ${left.text}` : left.text}
-      </Typography.Title>
-      <Typography.Body className="card__caption">
-        {left.overdue ? 'Ответа нет — можно жаловаться в инспекцию' : 'до истечения норматива'}
-      </Typography.Body>
-      <div className="card__bar">
-        <div className="card__bar-fill" style={{ width: `${Math.round(left.progress * 100)}%` }} />
+    <div className="doc">
+      <div className="doc__head">
+        <span className="doc__title">Текст обращения</span>
+        <button type="button" className="doc__copy" onClick={() => void copy()}>
+          {copied ? 'Скопировано' : 'Копировать'}
+        </button>
       </div>
+      <div className="doc__text">{text}</div>
     </div>
   )
 }
@@ -83,6 +105,10 @@ function Deadline({ request, now }: { request: RequestCard; now: number }) {
  *
  * Ради этого экрана мини-приложение и бралось в объём: в чате строка «осталось 9 дн.»
  * устаревает сразу после отправки, а здесь остаток пересчитывается каждую секунду.
+ *
+ * Вёрстка карточки своя, а не из CellList: список ячеек рассчитан на однородные строки,
+ * а здесь разнородные блоки — плашка состояния, таймер, факты, документ, — и вложение
+ * их в ячейку ломало выравнивание.
  *
  * Действия — отметить ответ, собрать жалобу, удалить — остались в боте: там они уже
  * работают, и раздваивать их между двумя поверхностями значит раздваивать и ошибки.
@@ -132,7 +158,9 @@ export function Requests() {
     <Panel className="app">
       <header className="app__header">
         <Typography.Title>Мои обращения</Typography.Title>
-        <Typography.Body>Сроки считаются от момента, когда вы подтвердили отправку</Typography.Body>
+        <Typography.Body className="app__lead">
+          Срок считается с момента, когда вы подтвердили отправку
+        </Typography.Body>
       </header>
 
       {error && (
@@ -152,41 +180,39 @@ export function Requests() {
 
       {items?.map((r) => {
         const status = describeStatus(r.status)
+        const tracked = r.status === 'Submitted' || r.status === 'Breached'
 
         return (
-          <CellList key={r.id} header={`№${r.number} · ${r.subject}`} mode="island">
-            <CellSimple
-              before={<Emblem tone={status.tone}>{status.icon}</Emblem>}
-              overline={r.address}
-              title={<span className={`pill pill--${status.pill}`}>{status.label}</span>}
-              subtitle={`Подано ${shortDate(r.submittedAt)}${r.zone ? ` · отвечает ${r.zone.toLowerCase()}` : ''}`}
-              separator
-            />
-
-            <div className="card__body">
-              <Deadline request={r} now={now} />
-
-              {r.deadlineDescription && (
-                <Typography.Body className="card__basis">
-                  Норматив: {r.deadlineDescription}
-                  {r.deadlineLegalBasis ? ` · основание: ${r.deadlineLegalBasis}` : ''}
-                </Typography.Body>
-              )}
-
-              {r.generatedText && (
-                <details className="card__text">
-                  <summary>Текст обращения</summary>
-                  <pre>{r.generatedText}</pre>
-                </details>
-              )}
+          <article className="card" key={r.id}>
+            <div className="card__top">
+              <span className="card__number">№{r.number}</span>
+              <span className={`pill pill--${status.tone}`}>
+                {status.icon} {status.label}
+              </span>
             </div>
-          </CellList>
+
+            <h3 className="card__subject">{r.subject}</h3>
+            <p className="card__address">{r.address}</p>
+
+            {tracked && <Timer request={r} now={now} />}
+
+            <div className="facts">
+              {r.zone && <Fact name="Отвечает" value={r.zone} />}
+              <Fact name="Подано" value={shortDate(r.submittedAt)} />
+              {r.deadlineDescription && <Fact name="Норматив" value={r.deadlineDescription} />}
+              {r.deadlineLegalBasis && <Fact name="Основание" value={r.deadlineLegalBasis} />}
+            </div>
+
+            {r.generatedText && <GeneratedText text={r.generatedText} />}
+          </article>
         )
       })}
 
-      <Typography.Body className="app__hint">
-        Отметить ответ, собрать жалобу в инспекцию или удалить обращение можно в чате с ботом.
-      </Typography.Body>
+      {items && items.length > 0 && (
+        <p className="footnote">
+          Отметить ответ, собрать жалобу в инспекцию или удалить обращение можно в чате с ботом.
+        </p>
+      )}
 
       {typeof window.WebApp?.close === 'function' && (
         <Button size="large" stretched onClick={() => window.WebApp?.close?.()}>
