@@ -144,14 +144,14 @@
 |---|---|---|---|---|
 | 5.1 | Повторная сверка с dev.max.ru/docs | Слава | [tech/02-max-integration.md](tech/02-max-integration.md) | ⬜ |
 | 5.2 | README: все 15 пунктов заполнены | Слава | [checklists/02-submission.md](checklists/02-submission.md) | ⬜ |
-| 5.3 | Docker: сборка ≤ 5 минут, замерена | Слава | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ⬜ |
-| 5.4 | Прогон с нуля на чистой машине по README | Семён | | ⬜ |
-| 5.5 | `git log -p` — секретов нет ни в одном коммите | Слава | [tech/06-security.md](tech/06-security.md) | ⬜ |
+| 5.3 | Docker: сборка ≤ 5 минут, замерена ✅ 30.09 — 39 с без кэша | Слава | [tech/05-docker-and-runtime.md](tech/05-docker-and-runtime.md) | ⬜ |
+| 5.4 | Прогон с нуля на чистой машине по README 🟡 30.09 — свежий клон из GitHub на машине Славы прошёл целиком; на чужой машине не проверялось | Семён | | ⬜ |
+| 5.5 | `git log -p` — секретов нет ни в одном коммите ✅ 30.09 — токен и ключи DaData: 0 совпадений во всей истории, `.env` не коммитился | Слава | [tech/06-security.md](tech/06-security.md) | ⬜ |
 | 5.6 | Презентация PDF: служебный слайд + 10 продуктовых | Никита | [product/07-presentation-outline.md](product/07-presentation-outline.md) | ⬜ |
 | 5.7 | Финальная версия слайда масштабирования | Никита | [product/05-scaling.md](product/05-scaling.md) | ⬜ |
 | 5.8 | Прогон [checklists/01-admission.md](checklists/01-admission.md) | все | | ⬜ |
 | 5.9 | Прогон [checklists/03-scoring.md](checklists/03-scoring.md) целиком | все | | ⬜ |
-| 5.10 | Зафиксировать commit hash, записать в презентацию, заморозить ветку | Слава | | ⬜ |
+| 5.10 | Зафиксировать commit hash, записать в презентацию, заморозить ветку ✅ 30.09 — прод собран из той же версии, что уходит на проверку; хеш вписывается в презентацию и форму сдачи | Слава | | ⬜ |
 
 После дедлайна код не изменяется. Возможность править появится только у финалистов после
 объявления результатов.

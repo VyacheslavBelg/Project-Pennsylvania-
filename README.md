@@ -7,6 +7,7 @@
 
 **Чат-бот в MAX:** [@t273_hakaton_max_bot](https://max.ru/t273_hakaton_max_bot)
 **Мини-приложение:** https://vyacheslavbelg.github.io/Project-Pennsylvania-/
+**API бэкенда:** https://domovoyapi-vyacheslavchuikov.amvera.io — проверка доступности `/health`
 
 В MAX бот отображается как «Хакатон МАХ 273» — это имя задано организаторами при выдаче
 токена, и на онлайн-этапе оно не меняется. «Домовой» — название продукта.
