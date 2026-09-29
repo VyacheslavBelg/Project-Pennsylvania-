@@ -39,6 +39,8 @@ public sealed class ProblemScenario(
         public const string Submitted = "problem:sent:";
         public const string Answered = "problem:answered:";
         public const string Escalate = "problem:escalate:";
+        public const string Delete = "problem:del:";
+        public const string DeleteConfirm = "problem:delyes:";
         public const string BackToMenu = "problem:back:menu";
         public const string BackToCategories = "problem:back:cats";
     }
@@ -358,9 +360,66 @@ public sealed class ProblemScenario(
             $"Обращение №{request.Number}: отметил, что ответ получен. Если проблему "
             + "не решили по существу — можно подать обращение заново.",
             [
+                [MaxButton.Callback($"Удалить №{request.Number} из списка", $"{Callbacks.Delete}{request.Id}")],
                 [MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)],
                 [MaxButton.Callback("Сообщить о другой проблеме", Callbacks.Start)]
             ], ct);
+    }
+
+    /// <summary>
+    /// Спрашивает подтверждение перед удалением.
+    ///
+    /// Восстановить обращение нельзя: вместе с ним уходят дата подачи, рассчитанный срок
+    /// и готовый текст — то, на что человек ссылался бы в жалобе. Случайное нажатие
+    /// в списке из десятка кнопок стоит слишком дорого, поэтому шаг подтверждения.
+    /// </summary>
+    public async Task HandleDeleteAskAsync(AppUser user, int requestId, CancellationToken ct)
+    {
+        var request = await db.Requests
+            .Include(r => r.ProblemCategory)
+            .FirstOrDefaultAsync(r => r.Id == requestId && r.AppUserId == user.Id, ct);
+
+        if (request is null)
+        {
+            await SendAsync("Обращение не найдено.",
+                [[MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)]], ct);
+            return;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"Удалить обращение №{request.Number}?");
+        sb.AppendLine();
+        sb.AppendLine(request.Subject ?? request.ProblemCategory.Title);
+        sb.AppendLine($"Подано {DateText.ShortDate(request.SubmittedAt ?? request.CreatedAt)}");
+        sb.AppendLine();
+        sb.Append("Вместе с ним пропадут дата подачи, рассчитанный срок и текст обращения. "
+            + "Восстановить их будет нельзя.");
+
+        await SendAsync(sb.ToString(),
+            [
+                [MaxButton.Callback("Да, удалить", $"{Callbacks.DeleteConfirm}{request.Id}")],
+                [MaxButton.Callback("Оставить", ProfileScenario.Callbacks.MyRequests)]
+            ], ct);
+    }
+
+    /// <summary>Удаляет обращение. Номера оставшихся не сдвигаются: номер — ссылка, а не позиция.</summary>
+    public async Task<bool> HandleDeleteAsync(AppUser user, int requestId, CancellationToken ct)
+    {
+        var request = await db.Requests
+            .FirstOrDefaultAsync(r => r.Id == requestId && r.AppUserId == user.Id, ct);
+
+        if (request is null)
+        {
+            await SendAsync("Обращение не найдено.",
+                [[MaxButton.Callback("Мои обращения", ProfileScenario.Callbacks.MyRequests)]], ct);
+            return false;
+        }
+
+        db.Requests.Remove(request);
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Пользователь {User} удалил обращение {Request}", user.MaxUserId, requestId);
+        return true;
     }
 
     public async Task HandleEscalateAsync(AppUser user, int requestId, CancellationToken ct)

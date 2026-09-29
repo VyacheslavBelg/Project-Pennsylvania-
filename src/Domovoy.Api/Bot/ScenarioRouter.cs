@@ -163,6 +163,23 @@ public sealed class ScenarioRouter(
         if (TryTail(payload, ProblemScenario.Callbacks.Escalate, out var escalateId))
         {
             await problem.HandleEscalateAsync(user, escalateId, ct);
+            return;
+        }
+
+        if (TryTail(payload, ProblemScenario.Callbacks.DeleteConfirm, out var deleteId))
+        {
+            // После удаления показываем список: экран удалённого обращения потерял смысл.
+            if (await problem.HandleDeleteAsync(user, deleteId, ct))
+            {
+                await profile.ShowRequestsAsync(user, ct);
+            }
+
+            return;
+        }
+
+        if (TryTail(payload, ProblemScenario.Callbacks.Delete, out var deleteAskId))
+        {
+            await problem.HandleDeleteAskAsync(user, deleteAskId, ct);
         }
     }
 

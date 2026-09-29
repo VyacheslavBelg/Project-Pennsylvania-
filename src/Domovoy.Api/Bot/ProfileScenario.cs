@@ -289,6 +289,8 @@ public sealed class ProfileScenario(
                 $"{ProblemScenario.Callbacks.Escalate}{r.Id}")]);
         }
 
+        buttons.Add([MaxButton.Callback("Удалить обращение",
+            $"{ProblemScenario.Callbacks.Delete}{r.Id}")]);
         buttons.Add([MaxButton.Callback("‹ К списку обращений", Callbacks.MyRequests)]);
 
         await SendAsync(sb.ToString().TrimEnd(), buttons, ct);
