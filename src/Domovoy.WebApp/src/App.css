@@ -1,10 +1,53 @@
+/*
+ * Оформление мини-приложения.
+ *
+ * Цвета берутся из токенов MAX UI (--text-primary, --background-card и прочие):
+ * у каждого есть пара для светлой и тёмной темы, поэтому приложение следует за
+ * оформлением мессенджера само. Собственные акценты заданы полупрозрачными
+ * подложками поверх фона — так они читаются в обеих темах без второго набора значений.
+ */
+
+:root {
+  --accent-blue: #007aff;
+  --accent-amber: #f0a020;
+  --accent-green: #1abe43;
+  --accent-red: #e0463e;
+}
+
 .app {
   max-width: 560px;
   margin: 0 auto;
-  padding: 12px 16px 32px;
+  padding: 8px 16px 32px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+/* ─── Шапка ─────────────────────────────────────────────────────────────── */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 18px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #2f6bff 0%, #7b45e8 100%);
+}
+
+.hero__title {
+  color: #fff;
+}
+
+.hero__subtitle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero__address {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .app__header {
@@ -16,10 +59,39 @@
 
 .app__hint {
   padding: 0 4px;
-  opacity: 0.7;
+  color: var(--text-tertiary);
 }
 
-/* Карточка обращения: живой отсчёт до истечения норматива. */
+/* ─── Значок раздела ────────────────────────────────────────────────────── */
+
+.emblem {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.emblem--blue {
+  background: rgba(0, 122, 255, 0.16);
+}
+
+.emblem--amber {
+  background: rgba(240, 160, 32, 0.18);
+}
+
+.emblem--green {
+  background: rgba(26, 190, 67, 0.16);
+}
+
+.emblem--red {
+  background: rgba(224, 70, 62, 0.16);
+}
+
+/* ─── Карточка обращения ────────────────────────────────────────────────── */
+
 .card__body {
   display: flex;
   flex-direction: column;
@@ -27,53 +99,95 @@
   padding: 12px 16px 16px;
 }
 
+.pill {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-detail);
+  font-weight: var(--font-weight-detail-strong);
+}
+
+.pill--wait {
+  color: var(--accent-blue);
+  background: rgba(0, 122, 255, 0.14);
+}
+
+.pill--late {
+  color: var(--accent-red);
+  background: rgba(224, 70, 62, 0.14);
+}
+
+.pill--done {
+  color: var(--accent-green);
+  background: rgba(26, 190, 67, 0.14);
+}
+
 .card__timer {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--background-secondary);
 }
 
 .card__clock {
-  font-variant-numeric: tabular-nums; /* цифры не прыгают при каждом тике */
+  /* Моноширинные цифры: иначе таймер дёргается на каждом тике. */
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-blue);
 }
 
 .card__timer--late .card__clock {
-  color: #e0463e;
+  color: var(--accent-red);
 }
 
 .card__caption,
 .card__basis,
 .card__deadline {
-  opacity: 0.7;
+  color: var(--text-tertiary);
 }
 
 .card__bar {
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(127, 127, 127, 0.25);
+  height: 5px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: var(--divider-primary);
   overflow: hidden;
 }
 
 .card__bar-fill {
   height: 100%;
-  border-radius: 2px;
-  background: currentColor;
+  border-radius: 3px;
+  background: var(--accent-blue);
   transition: width 1s linear;
 }
 
 .card__timer--late .card__bar-fill {
-  background: #e0463e;
+  background: var(--accent-red);
 }
 
 .card__text summary {
   cursor: pointer;
-  opacity: 0.7;
+  color: var(--text-secondary);
+  font-size: var(--font-size-description);
 }
 
 .card__text pre {
   margin: 8px 0 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--background-secondary);
   white-space: pre-wrap;
   word-break: break-word;
   font: inherit;
-  opacity: 0.85;
+  font-size: var(--font-size-description);
+  color: var(--text-secondary);
+}
+
+/* ─── Подпись внизу экрана ──────────────────────────────────────────────── */
+
+.footnote {
+  padding: 4px 4px 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-detail);
 }

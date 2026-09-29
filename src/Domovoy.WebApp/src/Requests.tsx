@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, CellList, CellSimple, Panel, Spinner, Typography } from '@maxhub/max-ui'
 import { ApiError, loadRequests, type RequestCard } from './api'
 import { remaining } from './Countdown'
+import { Emblem, type Tone } from './Emblem'
 
 const messageOf = (e: unknown) =>
   e instanceof ApiError ? e.message : 'Что-то пошло не так. Попробуйте ещё раз.'
@@ -18,21 +19,30 @@ function shortDate(iso: string): string {
   return d.getFullYear() === new Date().getFullYear() ? base : `${base} ${d.getFullYear()}`
 }
 
-/** Состояние обращения словами — то же, что показывает бот. */
-function describeStatus(status: string): { label: string; tone: string } {
+interface StatusLook {
+  label: string
+  /** Цвет плашки состояния. */
+  pill: 'wait' | 'late' | 'done'
+  /** Цвет значка и эмодзи слева от заголовка. */
+  tone: Tone
+  icon: string
+}
+
+/** Состояние обращения словами — те же формулировки, что показывает бот. */
+function describeStatus(status: string): StatusLook {
   switch (status) {
     case 'Submitted':
-      return { label: 'Ждём ответа', tone: 'wait' }
+      return { label: 'Ждём ответа', pill: 'wait', tone: 'blue', icon: '⏳' }
     case 'Answered':
-      return { label: 'Ответ получен', tone: 'done' }
+      return { label: 'Ответ получен', pill: 'done', tone: 'green', icon: '✅' }
     case 'Breached':
-      return { label: 'Срок нарушен', tone: 'late' }
+      return { label: 'Срок нарушен', pill: 'late', tone: 'red', icon: '❗' }
     case 'Escalated':
-      return { label: 'Жалоба в инспекцию подготовлена', tone: 'late' }
+      return { label: 'Жалоба подготовлена', pill: 'late', tone: 'red', icon: '📨' }
     case 'Closed':
-      return { label: 'Закрыто', tone: 'done' }
+      return { label: 'Закрыто', pill: 'done', tone: 'green', icon: '✅' }
     default:
-      return { label: 'Черновик', tone: 'wait' }
+      return { label: 'Черновик', pill: 'wait', tone: 'blue', icon: '✏️' }
   }
 }
 
@@ -146,8 +156,9 @@ export function Requests() {
         return (
           <CellList key={r.id} header={`№${r.number} · ${r.subject}`} mode="island">
             <CellSimple
+              before={<Emblem tone={status.tone}>{status.icon}</Emblem>}
               overline={r.address}
-              title={status.label}
+              title={<span className={`pill pill--${status.pill}`}>{status.label}</span>}
               subtitle={`Подано ${shortDate(r.submittedAt)}${r.zone ? ` · отвечает ${r.zone.toLowerCase()}` : ''}`}
               separator
             />

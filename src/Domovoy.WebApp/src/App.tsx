@@ -3,14 +3,9 @@ import { CellList, CellSimple, Panel, Typography } from '@maxhub/max-ui'
 import { BindForm } from './BindForm'
 import { DescribeForm, ProfileForm } from './TextForm'
 import { Requests } from './Requests'
+import { Emblem } from './Emblem'
+import { loadProfile, type Profile } from './api'
 import './App.css'
-
-interface BridgeInfo {
-  platform: string
-  version: string
-  device: string
-  insideMax: boolean
-}
 
 type View = 'home' | 'bind' | 'describe' | 'profile' | 'requests'
 
@@ -27,98 +22,80 @@ function startView(): View {
   return VIEWS.includes(value as View) ? (value as View) : 'home'
 }
 
-/**
- * Мини-приложение. Выбор дома работает; карточка обращения со статусом и таймером
- * норматива — следующий шаг.
- */
 export default function App() {
   const [view, setView] = useState<View>(startView)
-  // Вне MAX объекта Bridge нет, и это известно сразу — ждать эффекта незачем.
-  const [bridge, setBridge] = useState<BridgeInfo | null>(() =>
-    window.WebApp ? null : { platform: 'вне MAX', version: '—', device: '—', insideMax: false },
-  )
+  const [profile, setProfile] = useState<Profile | null>(null)
 
+  // Привязанный дом показывается в шапке: он определяет всё остальное, и человек
+  // должен видеть, о каком доме речь, не проваливаясь в разделы.
   useEffect(() => {
-    const webApp = window.WebApp
-
-    if (!webApp) {
+    if (view !== 'home' || !window.WebApp?.initData) {
       return
     }
 
-    // Методы Bridge могут возвращать как значение, так и Promise.
-    const resolve = async (value: unknown): Promise<string> => {
-      try {
-        return String((await value) ?? '—')
-      } catch {
-        return '—'
-      }
-    }
+    const controller = new AbortController()
 
-    void (async () => {
-      setBridge({
-        platform: await resolve(webApp.platform),
-        version: await resolve(webApp.version),
-        device: await resolve(webApp.deviceName),
-        insideMax: true,
+    loadProfile(controller.signal)
+      .then(setProfile)
+      .catch(() => {
+        // Дом не обязателен для показа главного экрана: молча обходимся без него.
       })
-    })()
-  }, [])
 
-  if (view === 'bind') {
-    return <BindForm />
-  }
+    return () => controller.abort()
+  }, [view])
 
-  if (view === 'describe') {
-    return <DescribeForm />
-  }
-
-  if (view === 'profile') {
-    return <ProfileForm />
-  }
-
-  if (view === 'requests') {
-    return <Requests />
-  }
+  if (view === 'bind') return <BindForm />
+  if (view === 'describe') return <DescribeForm />
+  if (view === 'profile') return <ProfileForm />
+  if (view === 'requests') return <Requests />
 
   return (
     <Panel className="app">
-      <header className="app__header">
-        <Typography.Title>Домовой</Typography.Title>
-        <Typography.Body>
+      <header className="hero">
+        <Typography.Title className="hero__title">Домовой</Typography.Title>
+        <Typography.Body className="hero__subtitle">
           Кто отвечает за проблему в доме и в какой срок обязан отреагировать
         </Typography.Body>
+        {profile?.address && (
+          <Typography.Body className="hero__address">🏠 {profile.address}</Typography.Body>
+        )}
       </header>
 
-      <CellList header="Дом" mode="island">
+      <CellList mode="island">
         <CellSimple
-          title="Выбрать или сменить дом"
-          subtitle="Поиск по государственному адресному реестру"
+          before={<Emblem tone="amber">⏱</Emblem>}
+          title="Мои обращения"
+          subtitle="Статус и время до истечения норматива"
+          showChevron
+          separator
+          onClick={() => setView('requests')}
+        />
+        <CellSimple
+          before={<Emblem tone="blue">🏠</Emblem>}
+          title="Мой дом"
+          subtitle={profile?.address ?? 'Поиск по государственному адресному реестру'}
           showChevron
           separator
           onClick={() => setView('bind')}
         />
         <CellSimple
+          before={<Emblem tone="green">👤</Emblem>}
           title="Мои данные"
-          subtitle="ФИО и квартира для текста обращения"
+          subtitle={profile?.fullName ?? 'ФИО и квартира для текста обращения'}
           showChevron
           onClick={() => setView('profile')}
         />
       </CellList>
 
-      <CellList header="Обращения" mode="island">
-        <CellSimple
-          title="Мои обращения"
-          subtitle="Статус и время до истечения норматива"
-          showChevron
-          onClick={() => setView('requests')}
-        />
-      </CellList>
+      <Typography.Body className="footnote">
+        Обращение составляет Домовой, отправляет житель: канала в системы управляющих
+        организаций у сервиса нет. Отсчёт срока идёт с момента, когда вы подтвердили отправку.
+      </Typography.Body>
 
-      <CellList header="Окружение" mode="island">
-        <CellSimple title={bridge?.platform ?? '…'} subtitle="Платформа запуска" separator />
-        <CellSimple title={bridge?.version ?? '…'} subtitle="Версия MAX" separator />
-        <CellSimple title={bridge?.device ?? '…'} subtitle="Устройство" />
-      </CellList>
+      <Typography.Body className="footnote">
+        Адреса — из государственного адресного реестра (ФИАС). Сведения об управляющих
+        организациях демонстрационные. Нормативные сроки приводятся с основанием.
+      </Typography.Body>
     </Panel>
   )
 }
