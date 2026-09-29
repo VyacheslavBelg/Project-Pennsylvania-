@@ -23,6 +23,9 @@ public sealed class ProfileScenario(
     /// <summary>Экран мини-приложения с полями ФИО и квартиры.</summary>
     private const string ProfileForm = "profile";
 
+    /// <summary>Экран мини-приложения с карточками обращений и живым отсчётом срока.</summary>
+    private const string RequestsScreen = "requests";
+
     public static class Steps
     {
         public const string AwaitingFullName = "profile:name";
@@ -216,6 +219,13 @@ public sealed class ProfileScenario(
                 buttons.Add([MaxButton.Callback(
                     Label($"№{r.Number} · {r.Subject ?? r.ProblemCategory.Title}"), $"{Callbacks.Card}{r.Id}")]);
             }
+        }
+
+        // В чате остаток срока устаревает сразу после отправки сообщения,
+        // в приложении он пересчитывается на глазах.
+        if (forms.Enabled)
+        {
+            buttons.Add([forms.Button("⏱ Сроки в приложении", RequestsScreen)]);
         }
 
         buttons.Add([MaxButton.Callback("Сообщить о проблеме", ProblemScenario.Callbacks.Start)]);

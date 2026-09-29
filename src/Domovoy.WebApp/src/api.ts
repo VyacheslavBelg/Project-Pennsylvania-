@@ -42,6 +42,21 @@ export interface Profile {
   address: string | null
 }
 
+/** Обращение для карточки: срок отдаётся моментом времени, остаток считает клиент. */
+export interface RequestCard {
+  id: number
+  number: number
+  subject: string
+  status: string
+  zone: string | null
+  address: string
+  submittedAt: string
+  deadlineAt: string | null
+  deadlineDescription: string | null
+  deadlineLegalBasis: string | null
+  generatedText: string | null
+}
+
 export class ApiError extends Error {}
 
 /** Текст ошибки для человека: бэкенд отдаёт его в поле detail. */
@@ -81,6 +96,9 @@ const authorized = (): HeadersInit => ({
   'Content-Type': 'application/json',
   'X-Max-Init-Data': window.WebApp?.initData ?? '',
 })
+
+export const loadRequests = (signal?: AbortSignal) =>
+  request<RequestCard[]>('/api/me/requests', { headers: authorized(), signal })
 
 export const loadProfile = (signal?: AbortSignal) =>
   request<Profile>('/api/me/profile', { headers: authorized(), signal })

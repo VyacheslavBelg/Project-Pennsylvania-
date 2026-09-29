@@ -134,6 +134,55 @@ public static class ApiEndpoints
             return Results.Ok(new { saved = true });
         });
 
+        // Обращения жителя для карточки в мини-приложении.
+        //
+        // Срок отдаётся моментом времени, а не строкой «осталось 9 дн.»: в чате такая
+        // строка устаревает сразу после отправки, а приложение считает остаток само
+        // и обновляет его на глазах. Ради этого мини-приложение и бралось в объём.
+        app.MapGet("/api/me/requests", async (
+            HttpRequest http,
+            MaxInitDataValidator auth,
+            DomovoyDbContext db,
+            CancellationToken ct) =>
+        {
+            if (auth.Validate(http.Headers[MaxInitDataValidator.Header]) is not { } identity)
+            {
+                return Results.Problem("Откройте приложение из бота в MAX.",
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.MaxUserId == identity.UserId, ct);
+            if (user is null)
+            {
+                return Results.Problem("Сначала откройте бота в MAX.",
+                    statusCode: StatusCodes.Status404NotFound);
+            }
+
+            var requests = await db.Requests
+                .Include(r => r.ProblemCategory)
+                .Include(r => r.ResponsibilityZone)
+                .Include(r => r.Building).ThenInclude(b => b.Address)
+                .Where(r => r.AppUserId == user.Id && r.Status != RequestStatus.Draft)
+                .OrderByDescending(r => r.SubmittedAt ?? r.CreatedAt)
+                .Take(20)
+                .ToListAsync(ct);
+
+            return Results.Ok(requests.Select(r => new
+            {
+                r.Id,
+                r.Number,
+                subject = r.Subject ?? r.ProblemCategory.Title,
+                status = r.Status.ToString(),
+                zone = r.ResponsibilityZone?.Title,
+                address = r.Building.Address.ToFullString(),
+                submittedAt = r.SubmittedAt ?? r.CreatedAt,
+                r.DeadlineAt,
+                r.DeadlineDescription,
+                r.DeadlineLegalBasis,
+                r.GeneratedText
+            }));
+        });
+
         // Текущие данные жителя — чтобы форма открылась уже заполненной.
         app.MapGet("/api/me/profile", async (
             HttpRequest http,

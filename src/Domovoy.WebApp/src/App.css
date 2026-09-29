@@ -18,3 +18,62 @@
   padding: 0 4px;
   opacity: 0.7;
 }
+
+/* Карточка обращения: живой отсчёт до истечения норматива. */
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+
+.card__timer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card__clock {
+  font-variant-numeric: tabular-nums; /* цифры не прыгают при каждом тике */
+}
+
+.card__timer--late .card__clock {
+  color: #e0463e;
+}
+
+.card__caption,
+.card__basis,
+.card__deadline {
+  opacity: 0.7;
+}
+
+.card__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(127, 127, 127, 0.25);
+  overflow: hidden;
+}
+
+.card__bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transition: width 1s linear;
+}
+
+.card__timer--late .card__bar-fill {
+  background: #e0463e;
+}
+
+.card__text summary {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.card__text pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+  opacity: 0.85;
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CellList, CellSimple, Panel, Typography } from '@maxhub/max-ui'
 import { BindForm } from './BindForm'
 import { DescribeForm, ProfileForm } from './TextForm'
+import { Requests } from './Requests'
 import './App.css'
 
 interface BridgeInfo {
@@ -11,10 +12,10 @@ interface BridgeInfo {
   insideMax: boolean
 }
 
-type View = 'home' | 'bind' | 'describe' | 'profile'
+type View = 'home' | 'bind' | 'describe' | 'profile' | 'requests'
 
 /** Экраны, которые бот открывает параметром запуска. */
-const VIEWS: readonly View[] = ['bind', 'describe', 'profile']
+const VIEWS: readonly View[] = ['bind', 'describe', 'profile', 'requests']
 
 /**
  * Экран, который просит бот. Внутри MAX параметр запуска приходит в initData, вне MAX
@@ -75,6 +76,10 @@ export default function App() {
     return <ProfileForm />
   }
 
+  if (view === 'requests') {
+    return <Requests />
+  }
+
   return (
     <Panel className="app">
       <header className="app__header">
@@ -97,6 +102,15 @@ export default function App() {
           subtitle="ФИО и квартира для текста обращения"
           showChevron
           onClick={() => setView('profile')}
+        />
+      </CellList>
+
+      <CellList header="Обращения" mode="island">
+        <CellSimple
+          title="Мои обращения"
+          subtitle="Статус и время до истечения норматива"
+          showChevron
+          onClick={() => setView('requests')}
         />
       </CellList>
 
