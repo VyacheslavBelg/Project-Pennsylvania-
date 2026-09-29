@@ -12,6 +12,10 @@
 
 meta:
   environment: docker
+  toolchain:
+    # Секция обязательна, даже когда окружение docker: без неё сборка падает
+    # с «Configuration file amvera.yaml must contain section meta.toolchain».
+    name: docker
 
 build:
   # Путь от корня репозитория: контекст сборки — весь репозиторий, потому что
